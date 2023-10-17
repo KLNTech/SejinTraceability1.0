@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.4.33213.308
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SejinTraceability", "SejinTraceability.csproj", "{2148D8BA-F8CD-49DA-87DE-938DF5C77384}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{2148D8BA-F8CD-49DA-87DE-938DF5C77384}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2148D8BA-F8CD-49DA-87DE-938DF5C77384}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2148D8BA-F8CD-49DA-87DE-938DF5C77384}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2148D8BA-F8CD-49DA-87DE-938DF5C77384}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {DB1E0952-010F-41D1-A2C1-1F421A05AC62}
+	EndGlobalSection
+EndGlobal
