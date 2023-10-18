@@ -41,7 +41,7 @@
             this.textBoxrack2 = new System.Windows.Forms.TextBox();
             this.textBoxPN = new System.Windows.Forms.TextBox();
             this.label3 = new System.Windows.Forms.Label();
-            this.checkBox1 = new System.Windows.Forms.CheckBox();
+            this.checkBoxStripping = new System.Windows.Forms.CheckBox();
             this.label4 = new System.Windows.Forms.Label();
             this.SuspendLayout();
             // 
@@ -151,16 +151,16 @@
             this.label3.TabIndex = 12;
             this.label3.Text = "Part Number";
             // 
-            // checkBox1
-            // 
-            this.checkBox1.AutoSize = true;
-            this.checkBox1.Location = new System.Drawing.Point(331, 191);
-            this.checkBox1.Name = "checkBox1";
-            this.checkBox1.Size = new System.Drawing.Size(15, 14);
-            this.checkBox1.TabIndex = 13;
-            this.checkBox1.UseVisualStyleBackColor = true;
-            this.checkBox1.CheckedChanged += new System.EventHandler(this.checkBox1_CheckedChanged);
-            // 
+            // checkBoxStripping
+            /* 
+            this.checkBoxStripping.AutoSize = true;
+            this.checkBoxStripping.Location = new System.Drawing.Point(331, 191);
+            this.checkBoxStripping.Name = "checkBoxStripping";
+            this.checkBoxStripping.Size = new System.Drawing.Size(15, 14);
+            this.checkBoxStripping.TabIndex = 13;
+            this.checkBoxStripping.UseVisualStyleBackColor = true;
+            this.checkBoxStripping.CheckedChanged += new System.EventHandler(this.checkBoxStripping_CheckedChanged);
+            */
             // label4
             // 
             this.label4.AutoSize = true;
@@ -170,13 +170,13 @@
             this.label4.TabIndex = 14;
             this.label4.Text = "Stripping";
             // 
-            // Form1
+            // straceabilitysystem
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(396, 287);
             this.Controls.Add(this.label4);
-            this.Controls.Add(this.checkBox1);
+            this.Controls.Add(this.checkBoxStripping);
             this.Controls.Add(this.label3);
             this.Controls.Add(this.textBoxPN);
             this.Controls.Add(this.textBoxrack2);
@@ -190,7 +190,7 @@
             this.Controls.Add(this.rack_qty);
             this.Controls.Add(this.textBoxtrace);
             this.Controls.Add(this.trace);
-            this.Name = "Form1";
+            this.Name = "straceabilitysystem";
             this.Text = "Form1";
             this.ResumeLayout(false);
             this.PerformLayout();
@@ -212,7 +212,7 @@
         private TextBox textBoxrack2;
         private TextBox textBoxPN;
         private Label label3;
-        private CheckBox checkBox1;
+        private CheckBox checkBoxStripping;
         private Label label4;
     }
 }

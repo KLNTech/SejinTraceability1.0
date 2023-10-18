@@ -46,7 +46,6 @@ namespace SejinTraceability
             }
         }
 
-        // ...
         private void SetActiveControl(System.Windows.Forms.TextBox targetTextBox)
         {
             // Ustaw aktywny kontrolnik w polu textBox na w¹tku g³ównym
@@ -118,75 +117,11 @@ namespace SejinTraceability
             }
         }
 
-       /* private void PrintLabel(string pn, DateTime date, TimeSpan hour, string rackQty, string rack, string trace, string p_trace, string revValue, string barcodeValue)
-        {
-            string currentDirectory = Directory.GetCurrentDirectory();
-            string excelFileName = "label.xlsx";
-            string excelFilePath = Path.Combine(currentDirectory, excelFileName);
-            Microsoft.Office.Interop.Excel.Application excelApp = new Microsoft.Office.Interop.Excel.Application();
-
-            try
-            {
-                Workbook workbook = excelApp.Workbooks.Open(excelFilePath, ReadOnly: false, UpdateLinks: false);
-                Worksheet worksheet = null;
-
-                foreach (Worksheet sheet in workbook.Sheets)
-                {
-                    if (sheet.Name == "label")
-                    {
-                        worksheet = sheet;
-                        break;
-                    }
-                }
-
-                if (worksheet != null)
-                {
-                    string qrString = "[)06:AS" + barcodeValue + ":PN" + pn + ":QT...blablabla";
-                    string p = (trace.Length == 13) ? "PM" : "VW";
-
-                    worksheet.Range["A7"].Value = pn;
-                    worksheet.Range["I2"].Value = p;
-                    worksheet.Range["G10"].Value = revValue;
-                    worksheet.Range["I6"].Value = qrString;
-                    worksheet.Range["A14"].Value = p_trace;
-                    worksheet.Range["A18"].Value = rackQty;
-                    worksheet.Range["E18"].Value = date;
-                    worksheet.Range["C21"].Value = hour;
-                    // ... pozosta³e wartoœci
-                    worksheet.PrintOut();
-                }
-                else
-                {
-                    Console.WriteLine("Nie znaleziono arkusza o nazwie 'label'.");
-                }
-
-                workbook.Close(true, excelFilePath);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("B³¹d: " + ex.Message);
-            }
-            finally
-            {
-                excelApp.Quit();
-            }
-        }
-*/
-        
         private (string rev, string updatedBarcode) GetRevAndBarcode(string pn)
         {
             string rev = string.Empty;
             string barcode = string.Empty;
 
-            /*   using (var context = new DatabaseContext())
-               {
-                   var databaseRecord = context.Database.FirstOrDefault(item => item.PN == pn);
-                   if (databaseRecord != null)
-                   {
-                       rev = databaseRecord.Rev;
-                   }
-               }
-            */
             using (SqlConnection connection = new SqlConnection(connectionString))
             {
                 connection.Open();
@@ -215,19 +150,16 @@ namespace SejinTraceability
 
             return (rev, barcode);
         }
-
         private void OpenAndPrintExcelFile(string pn, DateTime date, TimeSpan hour, string rackQty, string rack, string trace, string p_trace, string revValue, string barcodeValue)
         {
             string currentDirectory = Directory.GetCurrentDirectory();
             string excelFileName = "label.xlsx";
             string excelFilePath = Path.Combine(currentDirectory, excelFileName);
 
-            // Utwórz aplikacjê Excel
             Microsoft.Office.Interop.Excel.Application excelApp = new Microsoft.Office.Interop.Excel.Application();
 
             try
             {
-                // Otwórz istniej¹cy plik Excel
                 Workbook workbook = excelApp.Workbooks.Open(excelFilePath, ReadOnly: false, UpdateLinks: false);
                 Worksheet worksheet = null;
 
@@ -242,21 +174,16 @@ namespace SejinTraceability
 
                 if (worksheet != null)
                 {
-                    // Wype³nij odpowiednie komórki danymi
                     worksheet.Range["A7"].Value = pn;
-                    worksheet.Range["I2"].Value = "PM"; // Dla przyk³adu ustawiamy wartoœæ PM
+                    worksheet.Range["I2"].Value = "PM";
                     worksheet.Range["G10"].Value = revValue;
                     worksheet.Range["I6"].Value = barcodeValue;
                     worksheet.Range["A14"].Value = p_trace;
                     worksheet.Range["A18"].Value = rackQty;
                     worksheet.Range["E18"].Value = date;
                     worksheet.Range["C21"].Value = hour;
-                    // ... pozosta³e wartoœci
 
-                    // Drukuj plik Excel na domyœlnej drukarce
                     worksheet.PrintOut();
-
-                    // Zamknij plik Excel
                     workbook.Close(false, excelFilePath, Type.Missing);
                 }
                 else
@@ -270,13 +197,11 @@ namespace SejinTraceability
             }
             finally
             {
-                // Zamknij aplikacjê Excel
                 excelApp.Quit();
-
-                // Zwalnianie zasobów COM
                 System.Runtime.InteropServices.Marshal.ReleaseComObject(excelApp);
             }
         }
+
 
         private void PrintAndArchiveClick(object sender, EventArgs e)
         {
@@ -314,15 +239,17 @@ namespace SejinTraceability
             }
         }
 
+
+
     
-        private void checkBox1_CheckedChanged(object sender, EventArgs e)
-        {
+        //private void checkBox1_CheckedChanged(object sender, EventArgs e)
+        //{
             //zmiana bazy dabych do zapisu na tabele stripping
             //w momencie ponownego zeskanowania etykiety rekord jest usuwany
             //to ma byc mini WMS na to co jest aktualnie w reworku
         }
 
       
-    }
+   // }
 }
 
