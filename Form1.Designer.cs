@@ -60,6 +60,7 @@
             this.textBoxtrace.Name = "textBoxtrace";
             this.textBoxtrace.Size = new System.Drawing.Size(372, 23);
             this.textBoxtrace.TabIndex = 1;
+            this.textBoxtrace.TextChanged += new System.EventHandler(this.TextBox_TextChanged);
             // 
             // rack_qty
             // 
@@ -76,6 +77,7 @@
             this.textBoxrackqty.Name = "textBoxrackqty";
             this.textBoxrackqty.Size = new System.Drawing.Size(52, 23);
             this.textBoxrackqty.TabIndex = 3;
+            this.textBoxrackqty.TextChanged += new System.EventHandler(this.TextBox_TextChanged);
             // 
             // rack
             // 
@@ -92,6 +94,7 @@
             this.textBoxrack.Name = "textBoxrack";
             this.textBoxrack.Size = new System.Drawing.Size(67, 23);
             this.textBoxrack.TabIndex = 5;
+            this.textBoxrack.TextChanged += new System.EventHandler(this.TextBox_TextChanged);
             // 
             // print_archive
             // 
@@ -118,6 +121,7 @@
             this.textBoxtrace2.Name = "textBoxtrace2";
             this.textBoxtrace2.Size = new System.Drawing.Size(372, 23);
             this.textBoxtrace2.TabIndex = 8;
+            this.textBoxtrace2.TextChanged += new System.EventHandler(this.TextBoxTrace2_TextChanged);
             // 
             // label2
             // 
@@ -134,6 +138,7 @@
             this.textBoxrack2.Name = "textBoxrack2";
             this.textBoxrack2.Size = new System.Drawing.Size(67, 23);
             this.textBoxrack2.TabIndex = 10;
+            this.textBoxrack2.TextChanged += new System.EventHandler(this.TextBox_TextChanged);
             // 
             // textBoxPN
             // 
@@ -141,6 +146,7 @@
             this.textBoxPN.Name = "textBoxPN";
             this.textBoxPN.Size = new System.Drawing.Size(183, 23);
             this.textBoxPN.TabIndex = 11;
+            this.textBoxPN.TextChanged += new System.EventHandler(this.TextBox_TextChanged);
             // 
             // label3
             // 
@@ -152,15 +158,12 @@
             this.label3.Text = "Part Number";
             // 
             // checkBoxStripping
-            /* 
-            this.checkBoxStripping.AutoSize = true;
-            this.checkBoxStripping.Location = new System.Drawing.Point(331, 191);
+            // 
+            this.checkBoxStripping.Location = new System.Drawing.Point(332, 186);
             this.checkBoxStripping.Name = "checkBoxStripping";
-            this.checkBoxStripping.Size = new System.Drawing.Size(15, 14);
-            this.checkBoxStripping.TabIndex = 13;
-            this.checkBoxStripping.UseVisualStyleBackColor = true;
-            this.checkBoxStripping.CheckedChanged += new System.EventHandler(this.checkBoxStripping_CheckedChanged);
-            */
+            this.checkBoxStripping.Size = new System.Drawing.Size(104, 24);
+            this.checkBoxStripping.TabIndex = 15;
+            // 
             // label4
             // 
             this.label4.AutoSize = true;

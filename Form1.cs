@@ -5,54 +5,80 @@ using System.Reactive.Subjects;
 using System.Reactive.Concurrency;
 using System.Windows.Forms;
 using Microsoft.Office.Interop.Excel;
+using System.Threading;
+using System.IO;
+using TextBox = System.Windows.Forms.TextBox;
+using Action = System.Action;
 
 namespace SejinTraceability
 {
-    public partial class straceabilitysystem : Form, IObserver<string>
+    public partial class straceabilitysystem : Form
     {
         private readonly string connectionString;
-        private System.Windows.Forms.TextBox[] textBoxes;
-        private IDisposable inputSubscription;
+        private TextBox[] textBoxes;
         private int currentTextBoxIndex = 0;
-        private DateTime lastKeyPressTime = DateTime.Now;
-        private System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
         private Subject<string> inputSubject = new Subject<string>();
+        private IDisposable inputSubscription;
+        private readonly SynchronizationContext _syncContext;
 
         public straceabilitysystem()
         {
             InitializeComponent();
-            connectionString = SejinTraceability.Properties.Settings.Default.ConnectionString;
-            textBoxes = new System.Windows.Forms.TextBox[] { textBoxtrace, textBoxtrace2, textBoxPN, textBoxrackqty, textBoxrack, textBoxrack2 };
+            _syncContext = WindowsFormsSynchronizationContext.Current;
+            string connectionString = SejinTraceability.Properties.Settings.Default.ConnectionString;
 
-            foreach (var textBox in textBoxes)
+            // SprawdŸ, czy ConnectionString jest prawid³owy
+            if (!string.IsNullOrEmpty(connectionString))
             {
-                textBox.TextChanged += TextBoxes_TextChanged;
+                // Ustaw ConnectionString w obiekcie SqlConnection
+                SqlConnection connection = new SqlConnection(connectionString);
+
+                // Teraz mo¿esz u¿yæ obiektu 'connection' do wykonywania operacji na bazie danych.
+            }
+            else
+            {
+                // Obs³u¿ przypadki, gdy ConnectionString jest pusty lub null
+                Console.WriteLine("B³¹d: ConnectionString nie zosta³ prawid³owo skonfigurowany.");
+            }
+            if (string.IsNullOrEmpty(connectionString))
+            {
+                // Jeœli connectionString jest puste lub null, zwróæ b³¹d
+                throw new InvalidOperationException("ConnectionString property has not been initialized.");
             }
 
-            this.Load += (sender, e) => {
-                SetActiveControl(textBoxtrace);
-            };
+            textBoxes = new TextBox[] { textBoxtrace, textBoxtrace2, textBoxPN, textBoxrackqty, textBoxrack, textBoxrack2 };
+
+            inputSubscription = Observable.Merge(
+                Observable.FromEventPattern(textBoxtrace, "TextChanged").Select(pattern => ((TextBox)pattern.Sender).Text),
+                Observable.FromEventPattern(textBoxtrace2, "TextChanged").Select(pattern => ((TextBox)pattern.Sender).Text),
+                Observable.FromEventPattern(textBoxrackqty, "TextChanged").Select(pattern => ((TextBox)pattern.Sender).Text),
+                Observable.FromEventPattern(textBoxrack, "TextChanged").Select(pattern => ((TextBox)pattern.Sender).Text),
+                Observable.FromEventPattern(textBoxrack2, "TextChanged").Select(pattern => ((TextBox)pattern.Sender).Text)
+            )
+            .Throttle(TimeSpan.FromSeconds(1))
+            .DistinctUntilChanged()
+            .ObserveOn(SynchronizationContext.Current) // U¿yj obecnego kontekstu synchronizacji
+            .Subscribe(text => HandleTextChanged(text));
+            textBoxtrace2.Leave += TextBoxTrace2_Leave;
+            textBoxtrace2.Validated += TextBoxTrace2_Validated;
         }
 
-        private void TextBoxes_TextChanged(object sender, EventArgs e)
-        {
-            System.Windows.Forms.TextBox textBox = (System.Windows.Forms.TextBox)sender;
-            string text = textBox.Text;
+        private bool isAutoUpdate = false; // Flaga wskazuj¹ca, czy aktualizacja pola jest automatyczna
 
-            if (!string.IsNullOrEmpty(text))
+        private void UpdateTextBoxPN(string text)
+        {
+            isAutoUpdate = true; // Ustawiamy flagê na true przed automatyczn¹ aktualizacj¹
+            textBoxPN.Text = text;
+            isAutoUpdate = false; // Przywracamy flagê do wartoœci false po zakoñczeniu automatycznej aktualizacji
+        }
+                private void HandleTextChanged(string text)
+        {
+            if (text.Length >= 25 && !isAutoUpdate)
             {
-                inputSubject.OnNext(text);
+                string pn = text.Substring(13);
+                UpdateTextBoxPN(pn);
                 MoveToNextTextBox();
             }
-        }
-
-        private void SetActiveControl(System.Windows.Forms.TextBox targetTextBox)
-        {
-            // Ustaw aktywny kontrolnik w polu textBox na w¹tku g³ównym
-            this.Invoke(new System.Action(() =>
-            {
-                ActiveControl = targetTextBox;
-            }));
         }
 
         private void MoveToNextTextBox()
@@ -67,23 +93,76 @@ namespace SejinTraceability
                 MessageBox.Show("Wprowadzono dane do ostatniego pola (textBoxrack).");
             }
 
-            this.Invoke(new System.Action(() =>
-            {
-                ActiveControl = textBoxes[currentTextBoxIndex];
-            }));
+            ActiveControl = textBoxes[currentTextBoxIndex];
         }
 
-        public void OnCompleted()
+        protected override void OnHandleDestroyed(EventArgs e)
         {
-          
+            inputSubscription?.Dispose();
+            base.OnHandleDestroyed(e);
         }
-        public void OnError(Exception error)
+
+
+       private void TextBox_TextChanged(object sender, EventArgs e)
+{
+    System.Windows.Forms.TextBox textBox = (System.Windows.Forms.TextBox)sender;
+
+    if ((textBox == textBoxtrace || textBox == textBoxtrace2) && textBox.Text.Length >= 25)
+    {
+        string pn = textBox.Text.Substring(13);
+        textBoxPN.Text = string.IsNullOrEmpty(textBoxPN.Text) ? pn : textBoxPN.Text;
+        if (textBox == textBoxtrace2 && textBoxtrace2.Text.Length >= 25)
         {
-     
+            // SprawdŸ, czy dane zosta³y wprowadzone do textBoxTrace2 przed przeskoczeniem
+            MoveToNextTextBox();
         }
-        public void OnNext(string value)
+        else if (textBox == textBoxtrace && textBox.Text.Length == 25)
         {
-          
+            // Jeœli d³ugoœæ tekstu w textBoxTrace wynosi dok³adnie 25 znaków, pomijaj przeskakiwanie do textBoxPN
+        }
+        else
+        {
+            MoveToNextTextBox();
+        }
+    }
+    else if (textBox == textBoxrackqty && !string.IsNullOrEmpty(textBoxrackqty.Text))
+    {
+        MoveToNextTextBox();
+    }
+    else if (textBox == textBoxrack && !string.IsNullOrEmpty(textBoxrack.Text))
+    {
+        MoveToNextTextBox();
+    }
+    else if (textBox == textBoxrack2 && textBoxrack.Text.Length >= 25 && textBoxtrace2.Text.Length >= 25)
+    {
+        MoveToNextTextBox();
+    }
+}
+        private void TextBoxTrace2_Leave(object sender, EventArgs e)
+        {
+            TextBox textBox = (TextBox)sender;
+            if (textBox.Text.Length >= 25)
+            {
+                textBoxrackqty.Focus();
+            }
+        }
+        private void TextBoxTrace2_Validated(object sender, EventArgs e)
+        {
+            TextBox textBox = (TextBox)sender;
+            if (textBox.Text.Length >= 25)
+            {
+                MoveToNextTextBox();
+            }
+        }
+
+        private void TextBoxTrace2_TextChanged(object sender, EventArgs e)
+        {
+            TextBox textBox = (TextBox)sender;
+
+            if (textBox == textBoxtrace2 && textBox.Text.Length >= 25)
+            {
+                textBoxrackqty.Focus(); // Przeskakujemy do textBoxrackqty po wprowadzeniu 25 znaków w textBoxtrace2
+            }
         }
 
         private void InsertRecord(string pn, DateTime date, TimeSpan hour, string rackQty, string rack, string trace, string pTrace, string revValue, string barcodeValue)
@@ -150,6 +229,7 @@ namespace SejinTraceability
 
             return (rev, barcode);
         }
+
         private void OpenAndPrintExcelFile(string pn, DateTime date, TimeSpan hour, string rackQty, string rack, string trace, string p_trace, string revValue, string barcodeValue)
         {
             string currentDirectory = Directory.GetCurrentDirectory();
@@ -202,7 +282,6 @@ namespace SejinTraceability
             }
         }
 
-
         private void PrintAndArchiveClick(object sender, EventArgs e)
         {
             string trace = textBoxtrace.Text;
@@ -210,13 +289,13 @@ namespace SejinTraceability
             string rack = textBoxrack.Text;
             string trace2 = textBoxtrace2.Text;
             string rack2 = textBoxrack2.Text;
-            
 
 
-            if (trace.Length == 13)
+
+            if (trace.Length == 25)
             {
                 //trace 13 znakowy jest dla projektów PM, jest to unikalna d³ugoœæ dla tego projektu
-                string pn = trace.Substring(15, 8);
+                string pn = trace.Substring(13);
                 string p_trace = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + rackQty + rack + pn;
 
                 (string revValue, string barcodeValue) result = GetRevAndBarcode(pn);
@@ -226,7 +305,7 @@ namespace SejinTraceability
                 InsertRecord(pn, DateTime.Now.Date, DateTime.Now.TimeOfDay, rackQty, rack, trace, p_trace, revValue, barcodeValue);
                 OpenAndPrintExcelFile(pn, DateTime.Now.Date, DateTime.Now.TimeOfDay, rackQty, rack, trace, p_trace, revValue, barcodeValue);
             }
-            else if (trace.Length > 13 || !string.IsNullOrEmpty(rack))
+            else if (trace.Length > 25 || !string.IsNullOrEmpty(rack))
             {
                 // Obs³uga przypadku dla instrukcji "traceability" dla VW
                 // Tutaj mogê dodaæ kod obs³uguj¹cy instrukcjê "traceability"
@@ -241,15 +320,15 @@ namespace SejinTraceability
 
 
 
-    
+
         //private void checkBox1_CheckedChanged(object sender, EventArgs e)
         //{
-            //zmiana bazy dabych do zapisu na tabele stripping
-            //w momencie ponownego zeskanowania etykiety rekord jest usuwany
-            //to ma byc mini WMS na to co jest aktualnie w reworku
-        }
+        //zmiana bazy dabych do zapisu na tabele stripping
+        //w momencie ponownego zeskanowania etykiety rekord jest usuwany
+        //to ma byc mini WMS na to co jest aktualnie w reworku
+        //}
 
-      
-   // }
+
+
+    }
 }
-
