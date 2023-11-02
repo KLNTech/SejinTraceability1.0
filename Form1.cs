@@ -48,29 +48,37 @@ namespace SejinTraceability
                 .ObserveOn(SynchronizationContext.Current)
                 .Subscribe(_ => MoveToNextTextBox());
         }
+        private void ShowSuccessMessage(string message)
+        {
+            MessageBox.Show(message, "Sukces", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void ShowErrorMessage(string message)
+        {
+            MessageBox.Show(message, "B³¹d", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+
 
         private void HandleTextChanged(string text)
         {
-            if (text.Length >= 25)
+            if (text.Length == 25 && textBoxes[currentTextBoxIndex] == textBoxtrace)
             {
-                if (textBoxes[currentTextBoxIndex] == textBoxtrace)
-                {
-                    string pn = text.Substring(13);
-                    textBoxPN.Text = pn;
-                    userInputSubject.OnNext(Unit.Default);
-                }
+                string pn = text.Substring(13);
+                textBoxPN.Text = pn;
+                userInputSubject.OnNext(Unit.Default);
+                MoveToNextTextBox();
             }
-            else if (text.Length > 0 && textBoxes[currentTextBoxIndex] == textBoxPN && !projects.Contains(text))
+            else if (text.Length != 25 && textBoxes[currentTextBoxIndex] == textBoxtrace)
             {
                 ShowProjectSelectionDialog();
             }
             else
             {
-                userInputSubject.OnNext(Unit.Default);
+                MoveToNextTextBox();
             }
         }
 
-        private void MoveToNextTextBox()
+            private void MoveToNextTextBox()
         {
             if (currentTextBoxIndex < textBoxes.Length - 1)
             {
@@ -144,8 +152,21 @@ namespace SejinTraceability
                 string rev = result.revValue;
                 string barcode = result.barcodeValue;
 
-                InsertRecord(pn, DateTime.Now.Date, DateTime.Now.TimeOfDay, rackQty, rack, trace, p_trace, rev, barcode);
-                OpenAndPrintExcelFile(pn, DateTime.Now.Date, DateTime.Now.TimeOfDay, rackQty, rack, trace, p_trace, rev, barcode);
+                try
+                {
+                    InsertRecord(pn, DateTime.Now.Date, DateTime.Now.TimeOfDay, rackQty, rack, trace, p_trace, rev, barcode);
+                    OpenAndPrintExcelFile(pn, DateTime.Now.Date, DateTime.Now.TimeOfDay, rackQty, rack, trace, p_trace, rev, barcode);
+
+                    ShowSuccessMessage("Plik Excel zosta³ otwarty i wydrukowany.");
+                }
+                catch (Exception ex)
+                {
+                    ShowErrorMessage("B³¹d: " + ex.Message);
+                }
+                finally
+                {
+                    // Dzia³ania do wykonania po zakoñczeniu próby otwarcia i wydrukowania pliku Excel.
+                }
             }
             else if (trace.Length > 25 || !string.IsNullOrEmpty(rack))
             {
@@ -155,7 +176,7 @@ namespace SejinTraceability
             }
             else
             {
-                MessageBox.Show("B³¹d: Nieprawid³owa d³ugoœæ ci¹gu lub brak danych.");
+                ShowErrorMessage("B³¹d: Nieprawid³owa d³ugoœæ ci¹gu lub brak danych.");
             }
         }
 
@@ -182,11 +203,11 @@ namespace SejinTraceability
                     {
                         connection.Open();
                         cmd.ExecuteNonQuery();
-                        MessageBox.Show("Rekord zosta³ zarchiwizowany.");
+                        ShowSuccessMessage("Rekord zosta³ zarchiwizowany.");
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show("B³¹d podczas archiwizacji: " + ex.Message);
+                        ShowErrorMessage("B³¹d podczas archiwizacji: " + ex.Message);
                     }
                 }
             }
@@ -276,6 +297,12 @@ namespace SejinTraceability
                 excelApp.Quit();
                 System.Runtime.InteropServices.Marshal.ReleaseComObject(excelApp);
             }
+        }
+
+        private void ExportButtonClick(object sender, EventArgs e)
+        {
+            var exportForm = new ExportForm();
+            exportForm.ShowDialog();
         }
     }
 }

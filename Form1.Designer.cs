@@ -43,6 +43,7 @@
             this.label3 = new System.Windows.Forms.Label();
             this.checkBoxStripping = new System.Windows.Forms.CheckBox();
             this.label4 = new System.Windows.Forms.Label();
+            this.Export = new System.Windows.Forms.Button();
             this.SuspendLayout();
             // 
             // trace
@@ -173,11 +174,22 @@
             this.label4.TabIndex = 14;
             this.label4.Text = "Stripping";
             // 
+            // Export
+            // 
+            this.Export.Location = new System.Drawing.Point(413, 48);
+            this.Export.Name = "Export";
+            this.Export.Size = new System.Drawing.Size(75, 88);
+            this.Export.TabIndex = 16;
+            this.Export.Text = "Export";
+            this.Export.UseVisualStyleBackColor = true;
+            this.Export.Click += new System.EventHandler(this.ExportButtonClick);
+            // 
             // straceabilitysystem
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(396, 287);
+            this.ClientSize = new System.Drawing.Size(395, 289);
+            this.Controls.Add(this.Export);
             this.Controls.Add(this.label4);
             this.Controls.Add(this.checkBoxStripping);
             this.Controls.Add(this.label3);
@@ -195,6 +207,7 @@
             this.Controls.Add(this.trace);
             this.Name = "straceabilitysystem";
             this.Text = "Form1";
+            this.Click += new System.EventHandler(this.ExportButtonClick);
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -217,5 +230,6 @@
         private Label label3;
         private CheckBox checkBoxStripping;
         private Label label4;
+        private Button Export;
     }
 }
