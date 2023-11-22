@@ -61,7 +61,7 @@
             this.textBoxtrace.Name = "textBoxtrace";
             this.textBoxtrace.Size = new System.Drawing.Size(372, 23);
             this.textBoxtrace.TabIndex = 1;
-            this.textBoxtrace.TextChanged += new System.EventHandler(this.TextBoxTrace_TextChanged);
+            this.textBoxtrace.TextChanged += new System.EventHandler(this.TextBox_TextChanged);
             // 
             // rack_qty
             // 
@@ -122,7 +122,7 @@
             this.textBoxtrace2.Name = "textBoxtrace2";
             this.textBoxtrace2.Size = new System.Drawing.Size(372, 23);
             this.textBoxtrace2.TabIndex = 8;
-            this.textBoxtrace2.TextChanged += new System.EventHandler(this.TextBoxTrace2_TextChanged);
+            this.textBoxtrace2.TextChanged += new System.EventHandler(this.TextBox_TextChanged);
             // 
             // label2
             // 
@@ -147,7 +147,7 @@
             this.textBoxPN.Name = "textBoxPN";
             this.textBoxPN.Size = new System.Drawing.Size(183, 23);
             this.textBoxPN.TabIndex = 11;
-            this.textBoxPN.TextChanged += new System.EventHandler(this.TextBoxPN_TextChanged);
+            this.textBoxPN.TextChanged += new System.EventHandler(this.TextBox_TextChanged);
             // 
             // label3
             // 
