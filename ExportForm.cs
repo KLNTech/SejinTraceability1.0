@@ -10,13 +10,13 @@ namespace SejinTraceability
 {
     public partial class ExportForm : Form
     {
-        private string connectionString;
-        private string selectedProject;
+        private readonly string connectionString = System.Configuration.ConfigurationManager.ConnectionStrings["MyConnectionString"].ConnectionString;
+        private string? selectedProject;
         private DateTime startDate;
-        private ComboBox projectComboBox;
-        private DateTimePicker startDatePicker;
-        private DateTimePicker endDatePicker;
-        private System.Windows.Forms.Button Exportbutton;
+        private ComboBox? projectComboBox;
+        private DateTimePicker? startDatePicker;
+        private DateTimePicker? endDatePicker;
+        private System.Windows.Forms.Button? Exportbutton;
         private DateTime endDate;
 
         public ExportForm()
@@ -24,22 +24,22 @@ namespace SejinTraceability
             InitializeComponent();
         }
 
-        private void projectComboBox_SelectedIndexChanged(object sender, EventArgs e)
+        private void ProjectComboBox_SelectedIndexChanged(object sender, EventArgs e)
         {
             selectedProject = projectComboBox.SelectedItem.ToString();
         }
 
-        private void startDatePicker_ValueChanged(object sender, EventArgs e)
+        private void StartDatePicker_ValueChanged(object sender, EventArgs e)
         {
             startDate = startDatePicker.Value;
         }
 
-        private void endDatePicker_ValueChanged(object sender, EventArgs e)
+        private void EndDatePicker_ValueChanged(object sender, EventArgs e)
         {
             endDate = endDatePicker.Value;
         }
 
-        private void exportButton_Click(object sender, EventArgs e)
+        private void ExportButton_Click(object sender, EventArgs e)
         {
             try
             {
@@ -63,32 +63,28 @@ namespace SejinTraceability
 
         private System.Data.DataTable GetDataFromDatabase(string project, DateTime startDate, DateTime endDate)
         {
-            System.Data.DataTable dataTable = new System.Data.DataTable();
+            System.Data.DataTable dataTable = new();
 
-            using (SqlConnection connection = new SqlConnection(connectionString))
+            using (SqlConnection connection = new(connectionString))
             {
                 connection.Open();
                 string query = "SELECT * FROM Archive WHERE project = @project AND date BETWEEN @startDate AND @endDate";
-                using (SqlCommand cmd = new SqlCommand(query, connection))
-                {
-                    cmd.Parameters.AddWithValue("@project", project);
-                    cmd.Parameters.AddWithValue("@startDate", startDate);
-                    cmd.Parameters.AddWithValue("@endDate", endDate);
+                using SqlCommand cmd = new(query, connection);
+                cmd.Parameters.AddWithValue("@project", project);
+                cmd.Parameters.AddWithValue("@startDate", startDate);
+                cmd.Parameters.AddWithValue("@endDate", endDate);
 
-                    using (SqlDataAdapter adapter = new SqlDataAdapter(cmd))
-                    {
-                        adapter.Fill(dataTable);
-                    }
-                }
+                using SqlDataAdapter adapter = new(cmd);
+                adapter.Fill(dataTable);
             }
 
             return dataTable;
         }
 
-        private void ExportToExcel(System.Data.DataTable dataTable)
+        private static void ExportToExcel(System.Data.DataTable dataTable)
         {
             string excelFilePath = "exported_data.xlsx";
-            Application excelApp = new Application();
+            Application excelApp = new();
             Workbook workbook = excelApp.Workbooks.Add();
             Worksheet worksheet = workbook.Worksheets[1] as Worksheet;
 
@@ -112,12 +108,12 @@ namespace SejinTraceability
             Marshal.ReleaseComObject(excelApp);
         }
 
-        private void ShowSuccessMessage(string message)
+        private static void ShowSuccessMessage(string message)
         {
             MessageBox.Show(message, "Sukces", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-        private void ShowErrorMessage(string message)
+        private static void ShowErrorMessage(string message)
         {
             MessageBox.Show(message, "Błąd", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
@@ -160,7 +156,7 @@ namespace SejinTraceability
             this.Exportbutton.TabIndex = 3;
             this.Exportbutton.Text = "Export";
             this.Exportbutton.UseVisualStyleBackColor = true;
-            this.Exportbutton.Click += new System.EventHandler(this.exportButton_Click);
+            this.Exportbutton.Click += new System.EventHandler(this.ExportButton_Click);
             // 
             // ExportForm
             // 

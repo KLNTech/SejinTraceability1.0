@@ -1,6 +1,6 @@
 ﻿namespace SejinTraceability
 {
-    partial class straceabilitysystem
+    partial class TraceabilityForm
     {
         /// <summary>
         ///  Required designer variable.
@@ -184,7 +184,7 @@
             this.Export.UseVisualStyleBackColor = true;
             this.Export.Click += new System.EventHandler(this.ExportButtonClick);
             // 
-            // straceabilitysystem
+            // TraceabilityForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
@@ -205,7 +205,7 @@
             this.Controls.Add(this.rack_qty);
             this.Controls.Add(this.textBoxtrace);
             this.Controls.Add(this.trace);
-            this.Name = "straceabilitysystem";
+            this.Name = "TraceabilityForm";
             this.Text = "Form1";
             this.Click += new System.EventHandler(this.ExportButtonClick);
             this.ResumeLayout(false);

@@ -7,7 +7,7 @@ namespace SejinTraceability
     {
         private ComboBox ComboBoxProjects;
         private Button OkButton;
-        private Button CancelButton;
+        private new Button CancelButton;
 
         public event EventHandler<string> ProjectSelected;
 

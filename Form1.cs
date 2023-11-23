@@ -13,20 +13,20 @@ using System.Xml.Linq;
 
 namespace SejinTraceability
 {
-    public partial class straceabilitysystem : Form
+    public partial class TraceabilityForm : Form
     {
-        private string connectionString;
+        private readonly string connectionString;
         private System.Windows.Forms.TextBox[] textBoxes;
         private int currentTextBoxIndex = 0;
-        private Subject<Unit> userInputSubject = new Subject<Unit>();
+        private readonly Subject<Unit> userInputSubject = new();
         private IDisposable inputSubscription;
         private const int MaxCharacterCount = 25;
         private const int MaxIdleTimeSeconds = 1;
         private bool projectSelectionPending = false;
         private bool isAutoMoveInProgress = false;
-        private object lockObject = new object();
+        private readonly object lockObject = new();
 
-        public straceabilitysystem()
+        public TraceabilityForm()
         {
             InitializeComponent();
             connectionString = System.Configuration.ConfigurationManager.ConnectionStrings["MyConnectionString"].ConnectionString;
@@ -37,6 +37,8 @@ namespace SejinTraceability
             }
 
             InitializeFormTrace();
+            textBoxes = new System.Windows.Forms.TextBox[] { textBoxtrace, textBoxtrace2, textBoxrackqty, textBoxrack, textBoxrack2 };
+
         }
 
         public void InitializeFormTrace()
@@ -94,7 +96,7 @@ namespace SejinTraceability
             {
                 if (textBoxes[currentTextBoxIndex] == textBoxtrace)
                 {
-                    string pn = text.Substring(13);
+                    string pn = text[13..];
                     textBoxPN.Text = pn;
                     userInputSubject.OnNext(Unit.Default);
                     textBoxPN.Enabled = false;
@@ -250,6 +252,11 @@ namespace SejinTraceability
 
         private void ShowProjectSelectionDialog()
         {
+            if (!projectSelectionPending)
+            {
+                // Je¿eli nie oczekuje siê na wybór projektu, nie otwieraj okna.
+                return;
+            }
             var projectSelectionForm = new ProjectSelectionForm();
             projectSelectionForm.ProjectSelected += (sender, selectedProject) =>
             {
@@ -280,12 +287,12 @@ namespace SejinTraceability
 
             if (trace.Length == 25)
             {
-                string pn = trace.Substring(13);
+                string pn = trace[13..];
                 string p_trace = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + rackQty + rack + pn;
 
-                (string revValue, string barcodeValue) result = GetRevAndBarcode(pn);
-                string rev = result.revValue;
-                string barcode = result.barcodeValue;
+                (string revValue, string barcodeValue) = GetRevAndBarcode(pn);
+                string rev = revValue;
+                string barcode = barcodeValue;
 
                 try
                 {
@@ -318,34 +325,30 @@ namespace SejinTraceability
 
         private void InsertRecord(string pn, DateTime date, TimeSpan hour, string rackQty, string rack, string trace, string pTrace, string rev, string barcode)
         {
-            using (SqlConnection connection = new SqlConnection(connectionString))
+            using SqlConnection connection = new(connectionString);
+            string insertQuery = "INSERT INTO Archive (pn, date, hour, rack_qty, rack, trace, p_trace, rev, barcode) " +
+                                 "VALUES (@pn, @date, @hour, @rack_qty, @rack, @trace, @p_trace, @rev, @barcode)";
+
+            using SqlCommand cmd = new(insertQuery, connection);
+            cmd.Parameters.AddWithValue("@pn", pn);
+            cmd.Parameters.AddWithValue("@date", date);
+            cmd.Parameters.AddWithValue("@hour", hour);
+            cmd.Parameters.AddWithValue("@rack_qty", rackQty);
+            cmd.Parameters.AddWithValue("@rack", rack);
+            cmd.Parameters.AddWithValue("@trace", trace);
+            cmd.Parameters.AddWithValue("@p_trace", pTrace);
+            cmd.Parameters.AddWithValue("@rev", rev);
+            cmd.Parameters.AddWithValue("@barcode", barcode);
+
+            try
             {
-                string insertQuery = "INSERT INTO Archive (pn, date, hour, rack_qty, rack, trace, p_trace, rev, barcode) " +
-                                     "VALUES (@pn, @date, @hour, @rack_qty, @rack, @trace, @p_trace, @rev, @barcode)";
-
-                using (SqlCommand cmd = new SqlCommand(insertQuery, connection))
-                {
-                    cmd.Parameters.AddWithValue("@pn", pn);
-                    cmd.Parameters.AddWithValue("@date", date);
-                    cmd.Parameters.AddWithValue("@hour", hour);
-                    cmd.Parameters.AddWithValue("@rack_qty", rackQty);
-                    cmd.Parameters.AddWithValue("@rack", rack);
-                    cmd.Parameters.AddWithValue("@trace", trace);
-                    cmd.Parameters.AddWithValue("@p_trace", pTrace);
-                    cmd.Parameters.AddWithValue("@rev", rev);
-                    cmd.Parameters.AddWithValue("@barcode", barcode);
-
-                    try
-                    {
-                        connection.Open();
-                        cmd.ExecuteNonQuery();
-                        ShowSuccessMessage("Rekord zosta³ zarchiwizowany.");
-                    }
-                    catch (Exception ex)
-                    {
-                        ShowErrorMessage("B³¹d podczas archiwizacji: " + ex.Message);
-                    }
-                }
+                connection.Open();
+                cmd.ExecuteNonQuery();
+                ShowSuccessMessage("Rekord zosta³ zarchiwizowany.");
+            }
+            catch (Exception ex)
+            {
+                ShowErrorMessage("B³¹d podczas archiwizacji: " + ex.Message);
             }
         }
 
@@ -354,24 +357,20 @@ namespace SejinTraceability
             string rev = string.Empty;
             string barcode = string.Empty;
 
-            using (SqlConnection connection = new SqlConnection(connectionString))
+            using (SqlConnection connection = new(connectionString))
             {
                 connection.Open();
                 string query = "SELECT TOP 1 barcode FROM Archive ORDER BY date DESC, hour DESC";
-                using (SqlCommand cmd = new SqlCommand(query, connection))
+                using SqlCommand cmd = new(query, connection);
+                using SqlDataReader reader = cmd.ExecuteReader();
+                if (reader.Read())
                 {
-                    using (SqlDataReader reader = cmd.ExecuteReader())
-                    {
-                        if (reader.Read())
-                        {
-                            barcode = reader["barcode"].ToString();
-                        }
-                    }
+                    barcode = reader["barcode"].ToString();
                 }
             }
 
-            string firstPart = barcode.Substring(0, 7);
-            string secondPart = barcode.Substring(7);
+            string firstPart = barcode[..7];
+            string secondPart = barcode[7..];
 
             if (int.TryParse(secondPart, out int secondPartNumber))
             {
@@ -389,7 +388,7 @@ namespace SejinTraceability
             string excelFileName = "label.xlsx";
             string excelFilePath = Path.Combine(currentDirectory, excelFileName);
 
-            Microsoft.Office.Interop.Excel.Application excelApp = new Microsoft.Office.Interop.Excel.Application();
+            Microsoft.Office.Interop.Excel.Application excelApp = new();
 
             try
             {

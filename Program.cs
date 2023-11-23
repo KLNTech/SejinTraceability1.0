@@ -6,7 +6,7 @@ namespace SejinTraceability
         static void Main()
         {        
             ApplicationConfiguration.Initialize();            
-            straceabilitysystem form = new straceabilitysystem();            
+            TraceabilityForm form = new TraceabilityForm();            
             form.InitializeFormTrace();          
             Application.Run(form);
         }
