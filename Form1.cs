@@ -8,10 +8,6 @@ using System.Windows.Forms;
 using Microsoft.Office.Interop.Excel;
 using System.IO;
 using System.Reactive;
-using static QRCoder.PayloadGenerator.ShadowSocksConfig;
-using System.Xml.Linq;
-using System.Data;
-using System.Linq;
 
 namespace SejinTraceability
 {
@@ -23,11 +19,12 @@ namespace SejinTraceability
         private readonly Subject<Unit> userInputSubject = new();
         private IDisposable inputSubscription;
         private const int MaxCharacterCount = 25;
-        private const int MaxIdleTimeSeconds = 1;
+        private const int MaxIdleTimeSeconds = 3;
         private bool projectSelectionPending = false;
         private bool isAutoMoveInProgress = false;
         private readonly object lockObject = new();
         private bool isFormOpened = false;
+        private bool projectSelected = false;
 
         public TraceabilityForm()
         {
@@ -57,9 +54,9 @@ namespace SejinTraceability
             textBoxes = new System.Windows.Forms.TextBox[] { textBoxtrace, textBoxtrace2, textBoxrackqty, textBoxrack, textBoxrack2 };
 
             inputSubscription = userInputSubject
-      .Throttle(TimeSpan.FromSeconds(MaxIdleTimeSeconds))
-      .ObserveOn(SynchronizationContext.Current)  // Zmiana ta powinna rozwi¹zaæ problem
-      .Subscribe(_ => ThrottleMoveToNextTextBox());
+                .Throttle(TimeSpan.FromSeconds(MaxIdleTimeSeconds))
+                .ObserveOn(SynchronizationContext.Current)
+                .Subscribe(_ => ThrottleMoveToNextTextBox());
         }
 
         private void ShowSuccessMessage(string message)
@@ -90,10 +87,6 @@ namespace SejinTraceability
 
         private void HandleTextChanged(string text)
         {
-            // ta metoda monitoruje zmiany w tekœcie i podejmuje ró¿ne dzia³ania
-            // w zale¿noœci od d³ugoœci tekstu i pola tekstowego, które zosta³o zmienione.
-            // Jeœli tekst ma odpowiedni¹ d³ugoœæ, mo¿e to oznaczaæ zakoñczenie wprowadzania danych,
-            // co inicjuje przeniesienie do nastêpnego pola tekstowego.
             Console.WriteLine($"HandleTextChanged: TextBoxIndex: {currentTextBoxIndex}, Text: {text}");
 
             if (text.Length == MaxCharacterCount)
@@ -113,6 +106,7 @@ namespace SejinTraceability
             else if (text.Length != MaxCharacterCount && textBoxes[currentTextBoxIndex] == textBoxtrace)
             {
                 projectSelectionPending = true;
+
                 // Przesuñ do nastêpnego pola tylko, jeœli u¿ytkownik skoñczy³ wprowadzaæ ci¹g znaków
                 ThrottleMoveToNextTextBox();
             }
@@ -120,9 +114,6 @@ namespace SejinTraceability
 
         private async Task MoveToNextTextBox()
         {
-            //ta metoda zarz¹dza procesem automatycznego przechodzenia do nastêpnego pola tekstowego,
-            //uwzglêdniaj¹c ró¿ne warunki i scenariusze, takie jak wybór projektu, pominiêcie ruchu automatycznego,
-            //sprawdzenie pustego pola tekstowego, obs³uga ostatniego pola, oraz opóŸnienie przed przejœciem do nastêpnego pola.
             Console.WriteLine($"MoveToNextTextBox: TextBoxIndex: {currentTextBoxIndex}");
 
             if (projectSelectionPending)
@@ -135,6 +126,13 @@ namespace SejinTraceability
             if (!string.IsNullOrEmpty(skipAutoMove))
             {
                 skipAutoMove = null;
+                return;
+            }
+
+            if (!projectSelected)
+            {
+                // Jeœli nie, to poczekaj
+                await Task.Delay(500);
                 return;
             }
 
@@ -162,47 +160,50 @@ namespace SejinTraceability
             }
         }
 
-
-
-
-
         private async void ThrottleMoveToNextTextBox()
         {
-            // Metoda ThrottleMoveToNextTextBox odpowiada za kontrolowanie automatycznego
-            // przechodzenia do nastêpnego pola tekstowego, ale z ograniczeniem czasowym (throttle)
-
             Console.WriteLine("ThrottleMoveToNextTextBox called");
 
             lock (lockObject)
             {
-                // Ustawianie blokady (lockObject) w celu zabezpieczenia przed
-                // równoczesnym dostêpem wielu w¹tków do kodu chronionego t¹ blokad¹.
                 if (isAutoMoveInProgress)
                 {
-                    // Sprawdzanie, czy automatyczne przechodzenie do nastêpnego pola (isAutoMoveInProgress)
-                    // jest ju¿ w trakcie. Jeœli tak, to metoda koñczy siê, poniewa¿ nie mo¿na równoczeœnie
-                    // wykonywaæ wielu operacji tego typu.
                     return;
                 }
 
                 isAutoMoveInProgress = true;
-                // Jeœli automatyczne przechodzenie nie jest w trakcie, ustawia flagê na true,
-                // aby zablokowaæ kolejne wywo³ania tej metody.
             }
 
             Console.WriteLine($"Before MoveToNextTextBox: TextBoxIndex: {currentTextBoxIndex}");
 
-            // Oczekiwanie na asynchroniczne wykonanie metody MoveToNextTextBox
-            await MoveToNextTextBox();
+            // Poczekaj na potwierdzenie, ¿e u¿ytkownik przesta³ wprowadzaæ dane
+            await Task.Delay(TimeSpan.FromSeconds(MaxIdleTimeSeconds));
+
+            // Dodatkowy warunek, aby unikn¹æ natychmiastowego pokazywania okna ProjectSelectionForm
+            if (projectSelectionPending)
+            {
+                ShowProjectSelectionDialog();
+                projectSelectionPending = false;
+            }
+
+            // SprawdŸ, czy dane zosta³y wprowadzone przez u¿ytkownika
+            if (HasUserInput())
+            {
+                await MoveToNextTextBox();
+            }
 
             Console.WriteLine($"After MoveToNextTextBox: TextBoxIndex: {currentTextBoxIndex}");
 
             lock (lockObject)
             {
-                // Zdejmowanie blokady, ustawiaj¹c flagê isAutoMoveInProgress na false, co oznacza,
-                // ¿e teraz mo¿na ponownie wywo³aæ tê metodê.
                 isAutoMoveInProgress = false;
             }
+        }
+
+        private bool HasUserInput()
+        {
+            // SprawdŸ, czy którykolwiek z TextBox ma wprowadzone dane
+            return textBoxes.Any(tb => !string.IsNullOrWhiteSpace(tb.Text));
         }
 
 
@@ -229,15 +230,12 @@ namespace SejinTraceability
                 MessageBox.Show("Wprowadzono dane do ostatniego pola (textBoxrack2).");
             }
         }
+
         private void SetActiveControl()
         {
-            //SetActiveControl to metoda, która ustawia fokus(aktywny element, który reaguje na klawisze klawiatury) na jednym z pól tekstowych(TextBox)
-            //w zale¿noœci od bie¿¹cego indeksu currentTextBoxIndex. Je¿eli wywo³anie tej metody zachodzi w w¹tku interfejsu u¿ytkownika(UI), to fokus ustawiany
-            //jest bezpoœrednio.W przeciwnym razie(gdy wywo³anie pochodzi z innego w¹tku ni¿ UI), metoda Invoke jest u¿ywana do prze³¹czenia wykonania na w¹tek UI,
-            //gdzie nastêpnie ustawiany jest fokus.
             if (textBoxes[currentTextBoxIndex].InvokeRequired)
             {
-                textBoxes[currentTextBoxIndex].Invoke((MethodInvoker)delegate
+                textBoxes[currentTextBoxIndex].BeginInvoke((MethodInvoker)delegate
                 {
                     ActiveControl = textBoxes[currentTextBoxIndex];
                 });
@@ -247,6 +245,7 @@ namespace SejinTraceability
                 ActiveControl = textBoxes[currentTextBoxIndex];
             }
         }
+
         private void TextBox_TextChanged(object sender, EventArgs e)
         {
             Console.WriteLine("Event called");
@@ -258,22 +257,23 @@ namespace SejinTraceability
 
         private void ProjectSelectionForm_ProjectSelectedOnce(object sender, string selectedProject)
         {
-            isFormOpened = false; // Okno zosta³o ju¿ otwarte
+            projectSelected = true;
+            isFormOpened = false;
         }
 
         private void ShowProjectSelectionDialog()
         {
             if (!projectSelectionPending || isFormOpened)
             {
-                // Je¿eli nie oczekuje siê na wybór projektu lub okno jest ju¿ otwarte, nie otwieraj okna.
                 return;
             }
 
-            isFormOpened = true; // Ustaw flagê, ¿eby zapobiec otwarciu okna wiêcej ni¿ raz
-            ProjectSelectionForm projectSelectionForm = new ProjectSelectionForm(); // Create an instance
+            isFormOpened = true;
+            projectSelected = false; // Zresetuj flagê projectSelected
+            ProjectSelectionForm projectSelectionForm = new ProjectSelectionForm();
+            projectSelectionForm.ProjectSelectedOnce += ProjectSelectionForm_ProjectSelectedOnce;
             projectSelectionForm.ShowDialog();
         }
-
 
         private void PrintAndArchiveClick(object sender, EventArgs e)
         {
@@ -293,7 +293,7 @@ namespace SejinTraceability
                 string pn = trace[13..];
                 string p_trace = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + rackQty + rack + pn;
 
-                (string revValue, string barcodeValue) = GetRevAndBarcode(pn);
+                (string partname, string revValue, string barcodeValue) = GetPartNameRevAndBarcode(pn);
                 string rev = revValue;
                 string barcode = barcodeValue;
 
@@ -330,33 +330,57 @@ namespace SejinTraceability
         {
             using (SqlConnection connection = new SqlConnection(connectionString))
             {
-                string insertQuery = "INSERT INTO Archive (PN, Date, Hour, RackQty, Rack, Rack2, Trace, Trace2, PTrace, Barcode) " +
-                                     "VALUES (@pn, @date, @hour, @rack_qty, @rack, @rack2, @trace, @trace2, @p_trace, @barcode); " +
-                                     "SELECT CAST(SCOPE_IDENTITY() AS INT)";
+                // Pobierz PartName i Rev z tabeli Database na podstawie PN
+                string selectDatabaseQuery = "SELECT PartName, Rev FROM [Database] WHERE PN = @pn";
 
-                using (SqlCommand cmd = new SqlCommand(insertQuery, connection))
+                using (SqlCommand selectDatabaseCmd = new SqlCommand(selectDatabaseQuery, connection))
                 {
-                    cmd.Parameters.AddWithValue("@pn", pn);
-                    cmd.Parameters.AddWithValue("@date", date);
-                    cmd.Parameters.AddWithValue("@hour", hour);
-                    cmd.Parameters.AddWithValue("@rack_qty", rackQty);
-                    cmd.Parameters.AddWithValue("@rack", rack);
-                    cmd.Parameters.AddWithValue("@rack2", rack2);
-                    cmd.Parameters.AddWithValue("@trace", trace);
-                    cmd.Parameters.AddWithValue("@trace2", trace2);
-                    cmd.Parameters.AddWithValue("@p_trace", pTrace);
-                    cmd.Parameters.AddWithValue("@barcode", barcode);
+                    selectDatabaseCmd.Parameters.AddWithValue("@pn", pn);
+                    connection.Open();
+                    using (SqlDataReader reader = selectDatabaseCmd.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            string partName = reader["PartName"].ToString();
+                            string rev = reader["Rev"].ToString();
 
-                    try
-                    {
-                        connection.Open();
-                        // Wykorzystaj ExecuteScalar, aby uzyskaæ wartoœæ Identity dla nowo dodanego rekordu
-                        int idTrace = (int)cmd.ExecuteScalar();
-                        ShowSuccessMessage($"Rekord zosta³ zarchiwizowany. id_trace = {idTrace}");
-                    }
-                    catch (Exception ex)
-                    {
-                        ShowErrorMessage("B³¹d podczas archiwizacji: " + ex.Message);
+                            // Teraz, kiedy masz PartName i Rev, mo¿esz je wstawiæ do tabeli Archive
+                            string insertQuery = "INSERT INTO Archive (PN, Date, Hour, RackQty, Rack, Rack2, Trace, Trace2, PTrace, Barcode, PartName, Rev) " +
+                                                 "VALUES (@pn, @date, @hour, @rack_qty, @rack, @rack2, @trace, @trace2, @p_trace, @barcode, @part_name, @rev); " +
+                                                 "SELECT CAST(SCOPE_IDENTITY() AS INT)";
+
+                            using (SqlCommand insertCmd = new SqlCommand(insertQuery, connection))
+                            {
+                                insertCmd.Parameters.AddWithValue("@pn", pn);
+                                insertCmd.Parameters.AddWithValue("@date", date.ToString("MM/dd/yyyy"));
+                                insertCmd.Parameters.AddWithValue("@hour", hour.ToString(@"hh\:mm\:ss"));
+                                insertCmd.Parameters.AddWithValue("@rack_qty", rackQty);
+                                insertCmd.Parameters.AddWithValue("@rack", rack);
+                                insertCmd.Parameters.AddWithValue("@rack2", rack2);
+                                insertCmd.Parameters.AddWithValue("@trace", trace);
+                                insertCmd.Parameters.AddWithValue("@trace2", trace2);
+                                insertCmd.Parameters.AddWithValue("@p_trace", pTrace);
+                                insertCmd.Parameters.AddWithValue("@barcode", barcode);
+                                insertCmd.Parameters.AddWithValue("@part_name", partName);
+                                insertCmd.Parameters.AddWithValue("@rev", rev);
+
+                                try
+                                {
+                                    // Wykonaj wstawienie do tabeli Archive
+                                    int idTrace = (int)insertCmd.ExecuteScalar();
+                                    ShowSuccessMessage($"Rekord zosta³ zarchiwizowany. id_trace = {idTrace}");
+                                }
+                                catch (Exception ex)
+                                {
+                                    ShowErrorMessage("B³¹d podczas archiwizacji: " + ex.Message);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // Obs³u¿ przypadek, gdy nie znaleziono informacji dla danego PN w tabeli Database
+                            ShowErrorMessage($"Brak informacji w tabeli Database dla PN: {pn}");
+                        }
                     }
                 }
             }
@@ -364,23 +388,52 @@ namespace SejinTraceability
 
 
 
-        private (string revValue, string barcodeValue) GetRevAndBarcode(string pn)
+
+        private (string partName, string revValue, string barcodeValue) GetPartNameRevAndBarcode(string pn)
         {
+            string partName = string.Empty;
             string rev = string.Empty;
             string barcode = string.Empty;
 
-            using (SqlConnection connection = new(connectionString))
+            using (SqlConnection connection = new SqlConnection(connectionString))
             {
                 connection.Open();
-                string query = "SELECT TOP 1 barcode FROM Archive ORDER BY date DESC, hour DESC";
-                using SqlCommand cmd = new(query, connection);
-                using SqlDataReader reader = cmd.ExecuteReader();
-                if (reader.Read())
+
+                // Pobierz PartName, Rev z tabeli Database na podstawie PN
+                string selectDatabaseQuery = "SELECT TOP 1 [PartName], [Rev] FROM [Database] WHERE PN = @pn";
+
+                using (SqlCommand cmd = new SqlCommand(selectDatabaseQuery, connection))
                 {
-                    barcode = reader["barcode"].ToString();
+                    cmd.Parameters.AddWithValue("@pn", pn);
+
+                    using (SqlDataReader reader = cmd.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            partName = reader["PartName"].ToString();
+                            rev = reader["Rev"].ToString();
+                        }
+                    }
+                }
+
+                // Pobierz ostatni¹ wartoœæ kolumny "Barcode" z tabeli "Archive" na podstawie PN
+                string selectArchiveBarcodeQuery = "SELECT TOP 1 [Barcode] FROM [Archive] WHERE PN = @pn ORDER BY Date DESC, Hour DESC";
+
+                using (SqlCommand cmd = new SqlCommand(selectArchiveBarcodeQuery, connection))
+                {
+                    cmd.Parameters.AddWithValue("@pn", pn);
+
+                    using (SqlDataReader reader = cmd.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            barcode = reader["Barcode"].ToString();
+                        }
+                    }
                 }
             }
 
+            // Generuj now¹ wartoœæ kolumny "Barcode" na podstawie poprzedniej
             string firstPart = barcode[..7];
             string secondPart = barcode[7..];
 
@@ -391,8 +444,10 @@ namespace SejinTraceability
                 barcode = firstPart + incrementedSecondPart;
             }
 
-            return (rev, barcode);
+            return (partName, rev, barcode);
         }
+
+
 
         private static void OpenAndPrintExcelFile(string pn, DateTime date, TimeSpan hour, string rackQty, string rack, string rack2, string trace, string trace2, string p_trace, string rev, string barcode)
         {
@@ -415,7 +470,7 @@ namespace SejinTraceability
                         break;
                     }
                 }
-
+                
                 if (worksheet != null)
                 {
                     worksheet.Range["A7"].Value = pn;
