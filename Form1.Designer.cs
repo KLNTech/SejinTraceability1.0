@@ -206,7 +206,7 @@
             this.Controls.Add(this.textBoxtrace);
             this.Controls.Add(this.trace);
             this.Name = "TraceabilityForm";
-            this.Text = "Form1";
+            this.Text = "TraceabilityForm";
             this.Click += new System.EventHandler(this.ExportButtonClick);
             this.ResumeLayout(false);
             this.PerformLayout();

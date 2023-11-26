@@ -10,6 +10,8 @@ using System.IO;
 using System.Reactive;
 using static QRCoder.PayloadGenerator.ShadowSocksConfig;
 using System.Xml.Linq;
+using System.Data;
+using System.Linq;
 
 namespace SejinTraceability
 {
@@ -25,6 +27,7 @@ namespace SejinTraceability
         private bool projectSelectionPending = false;
         private bool isAutoMoveInProgress = false;
         private readonly object lockObject = new();
+        private bool isFormOpened = false;
 
         public TraceabilityForm()
         {
@@ -38,7 +41,8 @@ namespace SejinTraceability
 
             InitializeFormTrace();
             textBoxes = new System.Windows.Forms.TextBox[] { textBoxtrace, textBoxtrace2, textBoxrackqty, textBoxrack, textBoxrack2 };
-
+            var projectSelectionForm = new ProjectSelectionForm();
+            projectSelectionForm.ProjectSelectedOnce += ProjectSelectionForm_ProjectSelectedOnce;
         }
 
         public void InitializeFormTrace()
@@ -164,37 +168,39 @@ namespace SejinTraceability
 
         private async void ThrottleMoveToNextTextBox()
         {
-            //Metoda ThrottleMoveToNextTextBox odpowiada za kontrolowanie automatycznego
-            //przechodzenia do nastêpnego pola tekstowego, ale z ograniczeniem czasowym(throttle)
+            // Metoda ThrottleMoveToNextTextBox odpowiada za kontrolowanie automatycznego
+            // przechodzenia do nastêpnego pola tekstowego, ale z ograniczeniem czasowym (throttle)
+
             Console.WriteLine("ThrottleMoveToNextTextBox called");
+
             lock (lockObject)
             {
-                //Ustawianie blokady (lockObject) w celu zabezpieczenia przed
-                //równoczesnym dostêpem wielu w¹tków do kodu chronionego t¹ blokad¹.
+                // Ustawianie blokady (lockObject) w celu zabezpieczenia przed
+                // równoczesnym dostêpem wielu w¹tków do kodu chronionego t¹ blokad¹.
                 if (isAutoMoveInProgress)
                 {
-                    //Sprawdzanie, czy automatyczne przechodzenie do nastêpnego pola (isAutoMoveInProgress)
-                    //jest ju¿ w trakcie. Jeœli tak, to metoda koñczy siê, poniewa¿ nie mo¿na równoczeœnie
-                    //wykonywaæ wielu operacji tego typu.
+                    // Sprawdzanie, czy automatyczne przechodzenie do nastêpnego pola (isAutoMoveInProgress)
+                    // jest ju¿ w trakcie. Jeœli tak, to metoda koñczy siê, poniewa¿ nie mo¿na równoczeœnie
+                    // wykonywaæ wielu operacji tego typu.
                     return;
                 }
 
                 isAutoMoveInProgress = true;
-                //Jeœli automatyczne przechodzenie nie jest w trakcie, ustawia flagê na true,
-                //aby zablokowaæ kolejne wywo³ania tej metody.
+                // Jeœli automatyczne przechodzenie nie jest w trakcie, ustawia flagê na true,
+                // aby zablokowaæ kolejne wywo³ania tej metody.
             }
 
             Console.WriteLine($"Before MoveToNextTextBox: TextBoxIndex: {currentTextBoxIndex}");
 
-            //Oczekiwanie na asynchroniczne wykonanie metody MoveToNextTextBox
+            // Oczekiwanie na asynchroniczne wykonanie metody MoveToNextTextBox
             await MoveToNextTextBox();
 
             Console.WriteLine($"After MoveToNextTextBox: TextBoxIndex: {currentTextBoxIndex}");
 
             lock (lockObject)
             {
-                //Zdejmowanie blokady, ustawiaj¹c flagê isAutoMoveInProgress na false, co oznacza,
-                //¿e teraz mo¿na ponownie wywo³aæ tê metodê.
+                // Zdejmowanie blokady, ustawiaj¹c flagê isAutoMoveInProgress na false, co oznacza,
+                // ¿e teraz mo¿na ponownie wywo³aæ tê metodê.
                 isAutoMoveInProgress = false;
             }
         }
@@ -250,29 +256,24 @@ namespace SejinTraceability
             HandleTextChanged(text);
         }
 
+        private void ProjectSelectionForm_ProjectSelectedOnce(object sender, string selectedProject)
+        {
+            isFormOpened = false; // Okno zosta³o ju¿ otwarte
+        }
+
         private void ShowProjectSelectionDialog()
         {
-            if (!projectSelectionPending)
+            if (!projectSelectionPending || isFormOpened)
             {
-                // Je¿eli nie oczekuje siê na wybór projektu, nie otwieraj okna.
+                // Je¿eli nie oczekuje siê na wybór projektu lub okno jest ju¿ otwarte, nie otwieraj okna.
                 return;
             }
-            var projectSelectionForm = new ProjectSelectionForm();
-            projectSelectionForm.ProjectSelected += (sender, selectedProject) =>
-            {
-                //textBoxPN.Text = 
-                userInputSubject.OnNext(Unit.Default);
-                textBoxPN.Enabled = false;
-                ThrottleMoveToNextTextBox();
-            };
-            projectSelectionForm.FormClosed += (sender, e) =>
-            {
-                // Ustaw isAutoFilling z powrotem na false po zamkniêciu okna wyboru projektu
-                // Jestem zrozumia³ym, ¿e to jest zmienna, która ma byæ u¿ywana w przysz³oœci
-                // Na razie nie jest u¿ywana
-            };
+
+            isFormOpened = true; // Ustaw flagê, ¿eby zapobiec otwarciu okna wiêcej ni¿ raz
+            ProjectSelectionForm projectSelectionForm = new ProjectSelectionForm(); // Create an instance
             projectSelectionForm.ShowDialog();
         }
+
 
         private void PrintAndArchiveClick(object sender, EventArgs e)
         {
@@ -282,8 +283,10 @@ namespace SejinTraceability
         private void OpenAndPrintExcelFileHandler(object sender, EventArgs e)
         {
             string trace = textBoxtrace.Text;
+            string trace2 = textBoxtrace2.Text;
             string rackQty = textBoxrackqty.Text;
             string rack = textBoxrack.Text;
+            string rack2 = textBoxrack2.Text;
 
             if (trace.Length == 25)
             {
@@ -296,8 +299,8 @@ namespace SejinTraceability
 
                 try
                 {
-                    InsertRecord(pn, DateTime.Now.Date, DateTime.Now.TimeOfDay, rackQty, rack, trace, p_trace, rev, barcode);
-                    OpenAndPrintExcelFile(pn, DateTime.Now.Date, DateTime.Now.TimeOfDay, rackQty, rack, trace, p_trace, rev, barcode);
+                    InsertRecord(pn, DateTime.Now.Date, DateTime.Now.TimeOfDay, rackQty, rack, rack2, trace, trace2, p_trace, barcode);
+                    OpenAndPrintExcelFile(pn, DateTime.Now.Date, DateTime.Now.TimeOfDay, rackQty, rack, rack2, trace, trace2, p_trace, rev, barcode);
 
                     ShowSuccessMessage("Plik Excel zosta³ otwarty i wydrukowany.");
                 }
@@ -323,34 +326,43 @@ namespace SejinTraceability
         }
 
 
-        private void InsertRecord(string pn, DateTime date, TimeSpan hour, string rackQty, string rack, string trace, string pTrace, string rev, string barcode)
+        private void InsertRecord(string pn, DateTime date, TimeSpan hour, string rackQty, string rack, string rack2, string trace, string trace2, string pTrace, string barcode)
         {
-            using SqlConnection connection = new(connectionString);
-            string insertQuery = "INSERT INTO Archive (pn, date, hour, rack_qty, rack, trace, p_trace, rev, barcode) " +
-                                 "VALUES (@pn, @date, @hour, @rack_qty, @rack, @trace, @p_trace, @rev, @barcode)";
-
-            using SqlCommand cmd = new(insertQuery, connection);
-            cmd.Parameters.AddWithValue("@pn", pn);
-            cmd.Parameters.AddWithValue("@date", date);
-            cmd.Parameters.AddWithValue("@hour", hour);
-            cmd.Parameters.AddWithValue("@rack_qty", rackQty);
-            cmd.Parameters.AddWithValue("@rack", rack);
-            cmd.Parameters.AddWithValue("@trace", trace);
-            cmd.Parameters.AddWithValue("@p_trace", pTrace);
-            cmd.Parameters.AddWithValue("@rev", rev);
-            cmd.Parameters.AddWithValue("@barcode", barcode);
-
-            try
+            using (SqlConnection connection = new SqlConnection(connectionString))
             {
-                connection.Open();
-                cmd.ExecuteNonQuery();
-                ShowSuccessMessage("Rekord zosta³ zarchiwizowany.");
-            }
-            catch (Exception ex)
-            {
-                ShowErrorMessage("B³¹d podczas archiwizacji: " + ex.Message);
+                string insertQuery = "INSERT INTO Archive (PN, Date, Hour, RackQty, Rack, Rack2, Trace, Trace2, PTrace, Barcode) " +
+                                     "VALUES (@pn, @date, @hour, @rack_qty, @rack, @rack2, @trace, @trace2, @p_trace, @barcode); " +
+                                     "SELECT CAST(SCOPE_IDENTITY() AS INT)";
+
+                using (SqlCommand cmd = new SqlCommand(insertQuery, connection))
+                {
+                    cmd.Parameters.AddWithValue("@pn", pn);
+                    cmd.Parameters.AddWithValue("@date", date);
+                    cmd.Parameters.AddWithValue("@hour", hour);
+                    cmd.Parameters.AddWithValue("@rack_qty", rackQty);
+                    cmd.Parameters.AddWithValue("@rack", rack);
+                    cmd.Parameters.AddWithValue("@rack2", rack2);
+                    cmd.Parameters.AddWithValue("@trace", trace);
+                    cmd.Parameters.AddWithValue("@trace2", trace2);
+                    cmd.Parameters.AddWithValue("@p_trace", pTrace);
+                    cmd.Parameters.AddWithValue("@barcode", barcode);
+
+                    try
+                    {
+                        connection.Open();
+                        // Wykorzystaj ExecuteScalar, aby uzyskaæ wartoœæ Identity dla nowo dodanego rekordu
+                        int idTrace = (int)cmd.ExecuteScalar();
+                        ShowSuccessMessage($"Rekord zosta³ zarchiwizowany. id_trace = {idTrace}");
+                    }
+                    catch (Exception ex)
+                    {
+                        ShowErrorMessage("B³¹d podczas archiwizacji: " + ex.Message);
+                    }
+                }
             }
         }
+
+
 
         private (string revValue, string barcodeValue) GetRevAndBarcode(string pn)
         {
@@ -382,13 +394,13 @@ namespace SejinTraceability
             return (rev, barcode);
         }
 
-        private void OpenAndPrintExcelFile(string pn, DateTime date, TimeSpan hour, string rackQty, string rack, string trace, string p_trace, string rev, string barcode)
+        private static void OpenAndPrintExcelFile(string pn, DateTime date, TimeSpan hour, string rackQty, string rack, string rack2, string trace, string trace2, string p_trace, string rev, string barcode)
         {
             string currentDirectory = Directory.GetCurrentDirectory();
             string excelFileName = "label.xlsx";
             string excelFilePath = Path.Combine(currentDirectory, excelFileName);
 
-            Microsoft.Office.Interop.Excel.Application excelApp = new();
+            Microsoft.Office.Interop.Excel.Application excelApp = new Microsoft.Office.Interop.Excel.Application();
 
             try
             {
@@ -407,13 +419,15 @@ namespace SejinTraceability
                 if (worksheet != null)
                 {
                     worksheet.Range["A7"].Value = pn;
-                    worksheet.Range["I2"].Value = "PM";
+                    worksheet.Range["I2"].Value = "VW"; // Dla 25 znaków w textBoxtrace
                     worksheet.Range["G10"].Value = rev;
                     worksheet.Range["I6"].Value = barcode;
-                    worksheet.Range["A14"].Value = p_trace;
+                    worksheet.Range["G26"].Value = p_trace;
                     worksheet.Range["A18"].Value = rackQty;
                     worksheet.Range["E18"].Value = date.ToString("yyyy-MM-dd");
                     worksheet.Range["C21"].Value = hour.ToString(@"hh\:mm\:ss");
+                    worksheet.Range["A14"].Value = p_trace;
+                    worksheet.Range["A26"].Value = trace2; // Nowe pole trace2
 
                     worksheet.PrintOut();
                     workbook.Close(false, excelFilePath, Type.Missing);

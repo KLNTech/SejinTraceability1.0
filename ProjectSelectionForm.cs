@@ -10,7 +10,8 @@ namespace SejinTraceability
         private new Button CancelButton;
 
         public event EventHandler<string> ProjectSelected;
-
+        private bool projectSelected = false;
+        public event EventHandler<string> ProjectSelectedOnce;
         public ProjectSelectionForm()
         {
             InitializeComponent();
@@ -18,7 +19,12 @@ namespace SejinTraceability
             ComboBoxProjects.Items.Add("Projekt 2");
             ComboBoxProjects.Items.Add("Projekt 3");
         }
-
+        private void OnProjectSelected(string selectedProject)
+        {
+            projectSelected = true;
+            ProjectSelected?.Invoke(this, selectedProject);
+            Close();
+        }
         private void OkButton_Click(object sender, EventArgs e)
         {
             // Tutaj możesz dodać logikę, która pobierze wybrany projekt z formularza.
@@ -40,12 +46,7 @@ namespace SejinTraceability
             this.Close(); // Zamknij formularz po anulowaniu
         }
 
-        protected virtual void OnProjectSelected(string selectedProject)
-        {
-            ProjectSelected?.Invoke(this, selectedProject);
-            this.Close(); // Zamknij formularz po wybraniu projektu
-        }
-
+   
         private void InitializeComponent()
         {
             this.ComboBoxProjects = new System.Windows.Forms.ComboBox();
