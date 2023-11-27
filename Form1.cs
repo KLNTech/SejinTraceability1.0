@@ -337,12 +337,16 @@ namespace SejinTraceability
                 {
                     selectDatabaseCmd.Parameters.AddWithValue("@pn", pn);
                     connection.Open();
+
                     using (SqlDataReader reader = selectDatabaseCmd.ExecuteReader())
                     {
                         if (reader.Read())
                         {
                             string partName = reader["PartName"].ToString();
                             string rev = reader["Rev"].ToString();
+
+                            // Zamknij DataReader, poniewa¿ ju¿ uzyskaliœmy potrzebne dane
+                            reader.Close();
 
                             // Teraz, kiedy masz PartName i Rev, mo¿esz je wstawiæ do tabeli Archive
                             string insertQuery = "INSERT INTO Archive (PN, Date, Hour, RackQty, Rack, Rack2, Trace, Trace2, PTrace, Barcode, PartName, Rev) " +
@@ -385,8 +389,6 @@ namespace SejinTraceability
                 }
             }
         }
-
-
 
 
         private (string partName, string revValue, string barcodeValue) GetPartNameRevAndBarcode(string pn)
