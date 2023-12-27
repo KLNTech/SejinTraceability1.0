@@ -20,6 +20,8 @@ using System.Runtime.InteropServices;
 using ZXing.QrCode;
 using DocumentFormat.OpenXml.Drawing;
 using System.Diagnostics;
+using System.Reflection;
+
 
 
 namespace SejinTraceability
@@ -60,6 +62,8 @@ namespace SejinTraceability
                 throw new InvalidOperationException("ConnectionString property has not been initialized.");
             }
 
+            CheckDatabaseConnection();  // SprawdŸ po³¹czenie z baz¹ danych
+            CheckExcelFileAvailability(); // SprawdŸ dostêpnoœæ pliku Excel
             InitializeFormTrace();
             textBoxes = new System.Windows.Forms.TextBox[] { textBoxtrace, textBoxtrace2, textBoxrackqty, textBoxrack, textBoxrack2 };
             var projectSelectionForm = new ProjectSelectionForm();
@@ -112,6 +116,42 @@ namespace SejinTraceability
                 MessageBox.Show(message, "B³¹d", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
+        private void CheckDatabaseConnection()
+        {
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                try
+                {
+                    connection.Open();
+                    ShowSuccessMessage("Po³¹czenie z baz¹ danych zosta³o nawi¹zane.");
+                }
+                catch (SqlException ex)
+                {
+                    ShowErrorMessage("B³¹d po³¹czenia z baz¹ danych: " + ex.Message);
+                }
+            }
+        }
+        private void CheckExcelFileAvailability()
+        {
+            // Pobierz pe³n¹ œcie¿kê do pliku wykonywalnego aplikacji
+            string executablePath = Assembly.GetExecutingAssembly().Location;
+            string executableDirectory = System.IO.Path.GetDirectoryName(executablePath);
+
+            string labelDirectory = System.IO.Path.Combine(executableDirectory, "Label"); // Folder "Label" w tym samym katalogu, co plik wykonywalny
+            string excelFileName = "label.xlsx";
+            string excelFilePath = System.IO.Path.Combine(labelDirectory, excelFileName);
+
+            if (File.Exists(excelFilePath))
+            {
+                ShowSuccessMessage("Plik Excel jest dostêpny.");
+            }
+            else
+            {
+                ShowErrorMessage("Plik Excel nie jest dostêpny w lokalizacji: " + excelFilePath);
+            }
+        }
+
 
         private string skipAutoMove = null;
 
@@ -292,10 +332,7 @@ namespace SejinTraceability
                 Debug.WriteLine("ThrottleMoveToNextTextBox: Could not enter critical section, returning.");
             }
         }
-
-
-
-        6
+               
 
         private bool HasUserInput()
         {
