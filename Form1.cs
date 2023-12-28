@@ -119,7 +119,7 @@ namespace SejinTraceability
 
         private void CheckDatabaseConnection()
         {
-            using (SqlConnection connection = new SqlConnection(connectionString))
+            using (SqlConnection connection = new(connectionString))
             {
                 try
                 {
@@ -270,6 +270,7 @@ namespace SejinTraceability
 
         private async void ThrottleMoveToNextTextBox()
         {
+            await ExecuteThrottleMove();
             Debug.WriteLine("ThrottleMoveToNextTextBox called");
 
             if (InvokeRequired)
@@ -414,7 +415,7 @@ namespace SejinTraceability
 
             isFormOpened = true;
             projectSelected = false; // Zresetuj flagê projectSelected
-            ProjectSelectionForm projectSelectionForm = new ProjectSelectionForm();
+            ProjectSelectionForm projectSelectionForm = new();
             projectSelectionForm.ProjectSelectedOnce += ProjectSelectionForm_ProjectSelectedOnce;
             projectSelectionForm.ShowDialog();
         }
@@ -487,7 +488,7 @@ namespace SejinTraceability
         private void GenerateBarcodeAndSave(string data, string barcodeValue, string fileName)
         {
             // Utwórz obiekt BarcodeWriter dla kodu kreskowego
-            BarcodeWriter<Bitmap> barcodeWriter = new BarcodeWriter<Bitmap>();
+            BarcodeWriter<Bitmap> barcodeWriter = new();
             barcodeWriter.Format = BarcodeFormat.CODE_128;
 
             // Do³¹cz wartoœæ zmiennej barcode do danych kodu kreskowego
@@ -510,7 +511,7 @@ namespace SejinTraceability
         private void GenerateQRCodeAndSave(string qrText, string fileName)
         {
             // Utwórz obiekt BarcodeWriter z odpowiednimi parametrami typu
-            BarcodeWriter<Bitmap> barcodeWriter = new BarcodeWriter<Bitmap>();
+            BarcodeWriter<Bitmap> barcodeWriter = new();
             barcodeWriter.Format = BarcodeFormat.QR_CODE;
             barcodeWriter.Options = new ZXing.Common.EncodingOptions
             {
@@ -551,12 +552,12 @@ namespace SejinTraceability
 
         private void InsertRecord(string pn, DateTime date, TimeSpan hour, string rackQty, string rack, string rack2, string trace, string trace2, string pTrace, string barcode)
         {
-            using (SqlConnection connection = new SqlConnection(connectionString))
+            using (SqlConnection connection = new(connectionString))
             {
                 // Pobierz PartName i Rev z tabeli Database na podstawie PN
                 string selectDatabaseQuery = "SELECT PartName, Rev FROM [Database] WHERE PN = @pn";
 
-                using (SqlCommand selectDatabaseCmd = new SqlCommand(selectDatabaseQuery, connection))
+                using (SqlCommand selectDatabaseCmd = new(selectDatabaseQuery, connection))
                 {
                     selectDatabaseCmd.Parameters.AddWithValue("@pn", pn);
                     connection.Open();
@@ -576,7 +577,7 @@ namespace SejinTraceability
                                                  "VALUES (@pn, @date, @hour, @rack_qty, @rack, @rack2, @trace, @trace2, @p_trace, @barcode, @part_name, @rev); " +
                                                  "SELECT CAST(SCOPE_IDENTITY() AS INT)";
 
-                            using (SqlCommand insertCmd = new SqlCommand(insertQuery, connection))
+                            using (SqlCommand insertCmd = new(insertQuery, connection))
                             {
                                 insertCmd.Parameters.AddWithValue("@pn", pn);
                                 insertCmd.Parameters.AddWithValue("@date", date.ToString("MM/dd/yyyy"));
@@ -620,14 +621,14 @@ namespace SejinTraceability
             string rev = string.Empty;
             string barcode = string.Empty;
 
-            using (SqlConnection connection = new SqlConnection(connectionString))
+            using (SqlConnection connection = new(connectionString))
             {
                 connection.Open();
 
                 // Pobierz PartName, Rev z tabeli Database na podstawie PN
                 string selectDatabaseQuery = "SELECT TOP 1 [PartName], [Rev] FROM [Database] WHERE PN = @pn";
 
-                using (SqlCommand cmd = new SqlCommand(selectDatabaseQuery, connection))
+                using (SqlCommand cmd = new(selectDatabaseQuery, connection))
                 {
                     cmd.Parameters.AddWithValue("@pn", pn);
 
@@ -644,7 +645,7 @@ namespace SejinTraceability
                 // Pobierz ostatni¹ wartoœæ kolumny "Barcode" z tabeli "Archive" na podstawie PN
                 string selectArchiveBarcodeQuery = "SELECT TOP 1 [Barcode] FROM [Archive] WHERE PN = @pn ORDER BY Date DESC, Hour DESC";
 
-                using (SqlCommand cmd = new SqlCommand(selectArchiveBarcodeQuery, connection))
+                using (SqlCommand cmd = new(selectArchiveBarcodeQuery, connection))
                 {
                     cmd.Parameters.AddWithValue("@pn", pn);
 
@@ -683,7 +684,7 @@ namespace SejinTraceability
             string excelFilePath = System.IO.Path.Combine(currentDirectory, labelDirectory, excelFileName);
 
 
-            Microsoft.Office.Interop.Excel.Application excelApp = new Microsoft.Office.Interop.Excel.Application();
+            Microsoft.Office.Interop.Excel.Application excelApp = new();
 
             try
             {
