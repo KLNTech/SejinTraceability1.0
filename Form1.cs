@@ -21,6 +21,7 @@ using ZXing.QrCode;
 using DocumentFormat.OpenXml.Drawing;
 using System.Diagnostics;
 using System.Reflection;
+using ZXing.Rendering;
 
 
 
@@ -33,64 +34,106 @@ namespace SejinTraceability
         private int currentTextBoxIndex = 0;
         private readonly Subject<Unit> userInputSubject = new();
         private IDisposable inputSubscription;
-        private const int MaxCharacterCount = 25;
-        private const int MaxIdleTimeSeconds = 4;
-        private bool projectSelectionPending = false;
-        private bool isAutoMoveInProgress = false;
-        private readonly object lockObject = new();
-        private bool isFormOpened = false;
-        private bool projectSelected = false;
+        private const int MaxCharacterCount = 25;   
+        private readonly object lockObject = new();             
         private string rev;
         private string rackQty;
         private string rack2;
-        private string pn;
-        private bool isHandlingTextChanged = false;
+        private string pn;        
+        private const int ThrottleTimeSeconds = 1;
+
 
         public TraceabilityForm()
         {
             InitializeComponent();
             connectionString = System.Configuration.ConfigurationManager.ConnectionStrings["MyConnectionString"].ConnectionString;
-            SynchronizationContext syncContext = SynchronizationContext.Current;
-
-            if (syncContext == null)
-            {
-                throw new InvalidOperationException("SynchronizationContext is not available.");
-            }
-
-            if (string.IsNullOrEmpty(connectionString))
-            {
-                throw new InvalidOperationException("ConnectionString property has not been initialized.");
-            }
-
             CheckDatabaseConnection();  // SprawdŸ po³¹czenie z baz¹ danych
             CheckExcelFileAvailability(); // SprawdŸ dostêpnoœæ pliku Excel
+            textBoxes = new System.Windows.Forms.TextBox[] { textBoxtrace, textBoxtrace2, textBoxPN, textBoxrackqty, textBoxrack, textBoxrack2 };
             InitializeFormTrace();
-            textBoxes = new System.Windows.Forms.TextBox[] { textBoxtrace, textBoxtrace2, textBoxrackqty, textBoxrack, textBoxrack2 };
-            var projectSelectionForm = new ProjectSelectionForm();
-            projectSelectionForm.ProjectSelectedOnce += ProjectSelectionForm_ProjectSelectedOnce;
+            inputSubscription = SetupThrottle();
+        }
 
-            // Dodaj subskrypcjê po utworzeniu obiektu ProjectSelectionForm
-            inputSubscription = userInputSubject
-                .Throttle(TimeSpan.FromSeconds(MaxIdleTimeSeconds))
-                .ObserveOn(syncContext)  // Obserwuj na g³ównym w¹tku
-                .Subscribe(_ => ThrottleMoveToNextTextBox());
+
+        private void CheckDatabaseConnection()
+        {
+            using (SqlConnection connection = new(connectionString))
+            {
+                try
+                {
+                    connection.Open();
+                    ShowSuccessMessage("Po³¹czenie z baz¹ danych zosta³o nawi¹zane.");
+                }
+                catch (SqlException ex)
+                {
+                    ShowErrorMessage("B³¹d po³¹czenia z baz¹ danych: " + ex.Message);
+                }
+            }
+        }
+
+        private void CheckExcelFileAvailability()
+        {
+            // Pobierz pe³n¹ œcie¿kê do pliku wykonywalnego aplikacji
+            string executablePath = Assembly.GetExecutingAssembly().Location;
+            string executableDirectory = System.IO.Path.GetDirectoryName(executablePath);
+
+            string labelDirectory = System.IO.Path.Combine(executableDirectory, "Label"); // Folder "Label" w tym samym katalogu, co plik wykonywalny
+            string excelFileName = "label.xlsx";
+            string excelFilePath = System.IO.Path.Combine(labelDirectory, excelFileName);
+
+            if (File.Exists(excelFilePath))
+            {
+                ShowSuccessMessage("Plik Excel jest dostêpny.");
+            }
+            else
+            {
+                ShowErrorMessage("Plik Excel nie jest dostêpny w lokalizacji: " + excelFilePath);
+            }
+        }
+
+        private IDisposable SetupThrottle()
+        {
+            var syncContext = SynchronizationContext.Current;
+            return userInputSubject
+                .Throttle(TimeSpan.FromSeconds(ThrottleTimeSeconds))
+                .ObserveOn(syncContext)
+                .Subscribe(_ => HandleUserInput());
         }
 
         public void InitializeFormTrace()
         {
-            foreach (var textBox in new[] { textBoxtrace, textBoxtrace2, textBoxPN, textBoxrackqty, textBoxrack, textBoxrack2 })
+            if (textBoxes == null)
             {
-                textBox.TextChanged += TextBox_TextChanged;
+                // Zg³oœ b³¹d lub inicjalizuj textBoxes
+                return;
             }
 
-            
+            foreach (var textBox in textBoxes)
+            {
+                textBox.TextChanged += TextBox_TextChanged;
+                textBox.KeyUp += TextBox_KeyUp; // Dodaj obs³ugê KeyUp
+            }
+        }
 
-            textBoxes = new System.Windows.Forms.TextBox[] { textBoxtrace, textBoxtrace2, textBoxrackqty, textBoxrack, textBoxrack2 };
+        private void TextBox_KeyUp(object sender, KeyEventArgs e)
+        {
+            // Sygnalizowanie wprowadzenia danych przy ka¿dym naciœniêciu klawisza
+            userInputSubject.OnNext(Unit.Default);
+        }
 
-            inputSubscription = userInputSubject
-                .Throttle(TimeSpan.FromSeconds(MaxIdleTimeSeconds))
-                .ObserveOn(SynchronizationContext.Current)
-                .Subscribe(_ => ThrottleMoveToNextTextBox());
+        private void HandleUserInput()
+        {
+            if (Monitor.TryEnter(lockObject))
+            {
+                try
+                {
+                    ProcessCurrentTextBox();
+                }
+                finally
+                {
+                    Monitor.Exit(lockObject);
+                }
+            }
         }
 
         private void ShowSuccessMessage(string message)
@@ -117,309 +160,74 @@ namespace SejinTraceability
             }
         }
 
-        private void CheckDatabaseConnection()
+        private void ProcessCurrentTextBox()
         {
-            using (SqlConnection connection = new(connectionString))
+            var currentTextBox = textBoxes[currentTextBoxIndex];
+            var text = currentTextBox.Text;
+
+            // Specjalna obs³uga dla textBoxtrace
+            if (currentTextBox == textBoxtrace)
             {
-                try
+                if (text.Length == MaxCharacterCount)
                 {
-                    connection.Open();
-                    ShowSuccessMessage("Po³¹czenie z baz¹ danych zosta³o nawi¹zane.");
-                }
-                catch (SqlException ex)
-                {
-                    ShowErrorMessage("B³¹d po³¹czenia z baz¹ danych: " + ex.Message);
-                }
-            }
-        }
-        private void CheckExcelFileAvailability()
-        {
-            // Pobierz pe³n¹ œcie¿kê do pliku wykonywalnego aplikacji
-            string executablePath = Assembly.GetExecutingAssembly().Location;
-            string executableDirectory = System.IO.Path.GetDirectoryName(executablePath);
-
-            string labelDirectory = System.IO.Path.Combine(executableDirectory, "Label"); // Folder "Label" w tym samym katalogu, co plik wykonywalny
-            string excelFileName = "label.xlsx";
-            string excelFilePath = System.IO.Path.Combine(labelDirectory, excelFileName);
-
-            if (File.Exists(excelFilePath))
-            {
-                ShowSuccessMessage("Plik Excel jest dostêpny.");
-            }
-            else
-            {
-                ShowErrorMessage("Plik Excel nie jest dostêpny w lokalizacji: " + excelFilePath);
-            }
-        }
-
-
-        private string skipAutoMove = null;
-
-        private void HandleTextChanged(string text)
-        {
-            string message = $"HandleTextChanged: TextBoxIndex: {currentTextBoxIndex}, Text: {text}";
-
-            if (InvokeRequired)
-            {
-                Invoke(new MethodInvoker(delegate
-                {
-                    MessageBox.Show(message);
-                }));
-            }
-            else
-            {
-                MessageBox.Show(message);
-            }
-
-            if (text.Length == MaxCharacterCount)
-            {
-                if (textBoxes[currentTextBoxIndex] == textBoxtrace)
-                {
-                    string pn = text[13..];
+                    pn = text.Substring(13);
                     textBoxPN.Text = pn;
-                    userInputSubject.OnNext(Unit.Default);
                     textBoxPN.Enabled = false;
-
-                    // Przesuñ do nastêpnego pola od razu, gdy u¿ytkownik skoñczy wprowadzaæ ci¹g znaków
-                    MoveToNextTextBox();
-                }
-            }
-            else if (text.Length != MaxCharacterCount && textBoxes[currentTextBoxIndex] == textBoxtrace)
-            {
-                // Przesuñ do nastêpnego pola tylko, jeœli u¿ytkownik skoñczy³ wprowadzaæ ci¹g znaków
-                MoveToNextTextBox();
-            }
-        }
-
-
-        private async Task MoveToNextTextBox()
-        {
-            try
-            {
-                Debug.WriteLine($"MoveToNextTextBox: TextBoxIndex: {currentTextBoxIndex}");
-
-                if (projectSelectionPending)
-                {
-                    ShowProjectSelectionDialog();
-                    projectSelectionPending = false;
-                    return;
-                }
-
-                if (!string.IsNullOrEmpty(skipAutoMove))
-                {
-                    Debug.WriteLine("MoveToNextTextBox: No user input, showing message box.");
-                    skipAutoMove = null;
-                    return;
-                }
-
-                if (!projectSelected)
-                {
-                    // Poczekaj na potwierdzenie wyboru projektu
-                    await Task.Delay(200);
-                    return;
-                }
-
-                if (!isAutoMoveInProgress && string.IsNullOrWhiteSpace(textBoxes[currentTextBoxIndex].Text))
-                {
-                    Debug.WriteLine("MoveToNextTextBox: No user input, showing message box.");
-                    ShowMessageBox();
-                    return;
-                }
-
-                if (!isAutoMoveInProgress)
-                {
-                    Debug.WriteLine("MoveToNextTextBox: Changing currentTextBoxIndex and setting active control.");
-
-                    if (InvokeRequired)
-                    {
-                        Invoke(new MethodInvoker(() => currentTextBoxIndex = (currentTextBoxIndex + 1) % textBoxes.Length));
-                    }
-                    else
-                    {
-                        currentTextBoxIndex = (currentTextBoxIndex + 1) % textBoxes.Length;
-                    }
-
-                    if (currentTextBoxIndex == 0 && textBoxes[currentTextBoxIndex] == textBoxrack2)
-                    {
-                        Debug.WriteLine("MoveToNextTextBox: Wprowadzono dane do ostatniego pola (textBoxrack2).");
-                        ShowLastFieldMessageBox();
-                    }
-
-                    await Task.Delay(500);
-
-                    if (InvokeRequired)
-                    {
-                        Invoke(new MethodInvoker(() => SetActiveControl()));
-                    }
-                    else
-                    {
-                        SetActiveControl();
-                    }
-
-                    Debug.WriteLine($"MoveToNextTextBox: ActiveControl set to TextBoxIndex: {currentTextBoxIndex}");
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"MoveToNextTextBox Error: {ex.Message}");
-            }
-        }
-
-
-
-
-        private async void ThrottleMoveToNextTextBox()
-        {
-            await ExecuteThrottleMove();
-            Debug.WriteLine("ThrottleMoveToNextTextBox called");
-
-            if (InvokeRequired)
-            {
-                Invoke(new MethodInvoker(() => ExecuteThrottleMove()));
-            }
-            else
-            {
-                ExecuteThrottleMove();
-            }
-        }
-
-        private async void ExecuteThrottleMove()
-        {
-            if (Monitor.TryEnter(lockObject))
-            {
-                try
-                {
-                    if (isAutoMoveInProgress)
-                    {
-                        Debug.WriteLine("ThrottleMoveToNextTextBox: Auto move already in progress, returning.");
-                        return;
-                    }
-
-                    isAutoMoveInProgress = true;
-                }
-                finally
-                {
-                    Monitor.Exit(lockObject);
-                }
-
-                Debug.WriteLine($"Before MoveToNextTextBox: TextBoxIndex: {currentTextBoxIndex}");
-
-                try
-                {
-                    // Poczekaj na potwierdzenie, ¿e u¿ytkownik przesta³ wprowadzaæ dane
-                    await Task.Delay(TimeSpan.FromSeconds(MaxIdleTimeSeconds));
-
-                    // SprawdŸ, czy dane zosta³y wprowadzone przez u¿ytkownika
-                    if (HasUserInput())
-                    {
-                        await MoveToNextTextBox();
-                    }
-
-                    Debug.WriteLine($"After MoveToNextTextBox: TextBoxIndex: {currentTextBoxIndex}");
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"ThrottleMoveToNextTextBox Error: {ex.Message}");
-                }
-                finally
-                {
-                    Monitor.Enter(lockObject);
-                    isAutoMoveInProgress = false;
-                    Monitor.Exit(lockObject);
-                }
-            }
-            else
-            {
-                Debug.WriteLine("ThrottleMoveToNextTextBox: Could not enter critical section, returning.");
-            }
-        }
-               
-
-        private bool HasUserInput()
-        {
-            // SprawdŸ, czy którykolwiek z TextBox ma wprowadzone dane
-            return textBoxes.Any(tb => !string.IsNullOrWhiteSpace(tb.Text));
-        }
-
-
-        private void ShowMessageBox()
-        {
-            if (textBoxrackqty.InvokeRequired)
-            {
-                textBoxrackqty.Invoke(new MethodInvoker(delegate { ShowMessageBox(); }));
-            }
-            else
-            {
-                MessageBox.Show("WprowadŸ dane przed przejœciem dalej.");
-            }
-        }
-
-        private void ShowLastFieldMessageBox()
-        {
-            if (InvokeRequired)
-            {
-                Invoke(new MethodInvoker(delegate { ShowLastFieldMessageBox(); }));
-            }
-            else
-            {
-                MessageBox.Show("Wprowadzono dane do ostatniego pola (textBoxrack2).");
-            }
-        }
-
-        private void SetActiveControl()
-        {
-            if (textBoxes[currentTextBoxIndex] != null)
-            {
-                if (textBoxes[currentTextBoxIndex].InvokeRequired)
-                {
-                    textBoxes[currentTextBoxIndex].Invoke(new MethodInvoker(() =>
-                    {
-                        ActiveControl = textBoxes[currentTextBoxIndex];
-                        Debug.WriteLine($"SetActiveControl: ActiveControl set to TextBoxIndex: {currentTextBoxIndex}");
-                    }));
                 }
                 else
                 {
-                    ActiveControl = textBoxes[currentTextBoxIndex];
-                    Debug.WriteLine($"SetActiveControl: ActiveControl set to TextBoxIndex: {currentTextBoxIndex}");
+                    // Jeœli textBoxtrace nie ma 25 znaków, upewnij, ¿e textBoxPN jest aktywny
+                    textBoxPN.Enabled = true;
                 }
+            }
+
+            // SprawdŸ, czy mo¿na przejœæ do textBoxPN
+            if (currentTextBox == textBoxPN && !textBoxPN.Enabled)
+            {
+                // Jeœli textBoxPN jest wy³¹lczzoney, przeskocz do nastêpnego pola
+                MoveToNextTextBox();
+            }
+            else
+            {
+                // Normalne przesuniêcie do nastêpnego pola
+                MoveToNextTextBox();
+            }
+        }
+                
+        private void MoveToNextTextBox()
+        {
+            // Sprawdzanie, czy aktualne pole jest puste
+            var currentTextBox = textBoxes[currentTextBoxIndex];
+            if (string.IsNullOrWhiteSpace(currentTextBox.Text))
+            {
+                // Jeœli pole jest puste, nie przechodŸ do nastêpnego
+                return;
+            }
+
+            do
+            {
+                // Przejœcie do nastêpnego pola tekstowego
+                currentTextBoxIndex = (currentTextBoxIndex + 1) % textBoxes.Length;
+            }
+            while (currentTextBoxIndex != 0 && !textBoxes[currentTextBoxIndex].Enabled); // Pomijaj wy³¹czone pola
+
+            if (currentTextBoxIndex < textBoxes.Length)
+            {
+                var nextTextBox = textBoxes[currentTextBoxIndex];
+                nextTextBox.Focus();
+            }
+            else
+            {
+                MessageBox.Show("Uzupe³ni³eœ wszystkie wymagane pola.");
+                currentTextBoxIndex = 0; // Resetuj indeks do pocz¹tkowego stanu
             }
         }
 
         private void TextBox_TextChanged(object sender, EventArgs e)
         {
-            if (isHandlingTextChanged)
-            {
-                return;
-            }
-            isHandlingTextChanged = true;
-            Debug.WriteLine("Event called");
-            System.Windows.Forms.TextBox textBox = (System.Windows.Forms.TextBox)sender;
-            string text = textBox.Text;
-            Debug.WriteLine($"TextBox_TextChanged: Text: {text}");
-            HandleTextChanged(text);
+            // Sygnalizowanie wprowadzenia danych równie¿ w przypadku zmiany tekstu
+            userInputSubject.OnNext(Unit.Default);
         }
-
-        private void ProjectSelectionForm_ProjectSelectedOnce(object sender, string selectedProject)
-        {
-            projectSelected = true;
-            isFormOpened = false;
-        }
-
-        private void ShowProjectSelectionDialog()
-        {
-            if (!projectSelectionPending || isFormOpened)
-            {
-                return;
-            }
-
-            isFormOpened = true;
-            projectSelected = false; // Zresetuj flagê projectSelected
-            ProjectSelectionForm projectSelectionForm = new();
-            projectSelectionForm.ProjectSelectedOnce += ProjectSelectionForm_ProjectSelectedOnce;
-            projectSelectionForm.ShowDialog();
-        }
-
 
         private string GenerateLotCode(DateTime date)
         {
@@ -431,14 +239,9 @@ namespace SejinTraceability
             char dayCode = date.Day <= 25 ? (char)('A' + date.Day - 1) : (char)('1' + date.Day - 26);
 
             return $"{yearCode}{monthCode}{dayCode}";
-        }
+        }        
 
-        private void PrintAndArchiveClick(object sender, EventArgs e)
-        {
-            OpenAndPrintExcelFileHandler(sender, e);
-        }
-
-        private void OpenAndPrintExcelFileHandler(object sender, EventArgs e)
+        private async void OpenAndPrintExcelFileHandler(object sender, EventArgs e)
         {
             string trace = textBoxtrace.Text;
             string trace2 = textBoxtrace2.Text;
@@ -446,93 +249,130 @@ namespace SejinTraceability
             string rack = textBoxrack.Text;
             string rack2 = textBoxrack2.Text;
 
-
-            if (trace.Length == 25)
+            try
             {
-                string pn = trace[13..];
-                string p_trace = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + rackQty + rack + pn;
-
-                (string partname, string revValue, string barcodeValue) = GetPartNameRevAndBarcode(pn);
-                rev = revValue;
-                string barcode = barcodeValue;
-
-                try
+                if (trace.Length == MaxCharacterCount)
                 {
+                    
+                    string p_trace = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + rackQty + rack + pn;
+
+                    var (partName, revValue, barcodeValue) = await GetPartNameRevAndBarcodeAsync(pn);
+                    rev = revValue;
+                    string barcode = barcodeValue;                   
                     GenerateAndSaveQRCode(trace, trace2, pn, rev, rackQty, barcode);
+                    GenerateBarcodeAndSave(barcodeValue);                    
                     InsertRecord(pn, DateTime.Now.Date, DateTime.Now.TimeOfDay, rackQty, rack, rack2, trace, trace2, p_trace, barcode);
-                    OpenAndPrintExcelFile(pn, DateTime.Now.Date, DateTime.Now.TimeOfDay, rackQty, rack, rack2, trace, trace2, p_trace, rev, barcode);
+                    //OpenAndPrintExcelFile(pn, DateTime.Now.Date, DateTime.Now.TimeOfDay, rackQty, rack, rack2, trace, trace2, p_trace, rev, barcode);
 
                     ShowSuccessMessage("Plik Excel zosta³ otwarty i wydrukowany.");
                 }
-                catch (Exception ex)
+                else if (trace.Length != MaxCharacterCount)
                 {
-                    ShowErrorMessage("B³¹d: " + ex.Message);
+                   string pn = textBoxPN.Text;
+                    string p_trace = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + rackQty + rack + pn;
+
+                    var (partName, revValue, barcodeValue) = await GetPartNameRevAndBarcodeAsync(pn);
+                    rev = revValue;
+                    string barcode = barcodeValue;
+
+                   GenerateAndSaveQRCode(trace, trace2, pn, rev, rackQty, barcode);
+                   GenerateBarcodeAndSave(barcodeValue);
+                   InsertRecord(pn, DateTime.Now.Date, DateTime.Now.TimeOfDay, rackQty, rack, rack2, trace, trace2, p_trace, barcode);
+                   //OpenAndPrintExcelFile(pn, DateTime.Now.Date, DateTime.Now.TimeOfDay, rackQty, rack, rack2, trace, trace2, p_trace, rev, barcode);
+
+                    ShowSuccessMessage("Plik Excel zosta³ otwarty i wydrukowany.");
                 }
-                finally
+                else
                 {
-                    // Dzia³ania do wykonania po zakoñczeniu próby otwarcia i wydrukowania pliku Excel.
+                    ShowErrorMessage("B³¹d: Nieprawid³owa d³ugoœæ ci¹gu lub brak danych.");
                 }
             }
-            else if (trace.Length > 25 || !string.IsNullOrEmpty(rack))
+            catch (Exception ex)
             {
-                // Obs³uga przypadku dla instrukcji "traceability" dla VW
-                // Tutaj mo¿esz dodaæ kod obs³uguj¹cy instrukcjê "traceability"
-                // oraz archiwizacjê wyników tej instrukcji
-            }
-            else
-            {
-                ShowErrorMessage("B³¹d: Nieprawid³owa d³ugoœæ ci¹gu lub brak danych.");
+                ShowErrorMessage("Wyst¹pi³ b³¹d: " + ex.Message);
             }
         }
 
-        private void GenerateBarcodeAndSave(string data, string barcodeValue, string fileName)
+
+        private void GenerateBarcodeAndSave(string barcodeValue)
         {
-            // Utwórz obiekt BarcodeWriter dla kodu kreskowego
-            BarcodeWriter<Bitmap> barcodeWriter = new();
-            barcodeWriter.Format = BarcodeFormat.CODE_128;
-
-            // Do³¹cz wartoœæ zmiennej barcode do danych kodu kreskowego
-            string fullData = $"{data} {barcodeValue}";
-
-            // Utwórz obraz kodu kreskowego
-            Bitmap barcodeBitmap = barcodeWriter.Write(fullData);
-
-            // Utwórz katalog "Barcode", jeœli nie istnieje
-            string barcodeDirectory = System.IO.Path.GetDirectoryName(fileName);
-            if (!Directory.Exists(barcodeDirectory))
+            try
             {
-                Directory.CreateDirectory(barcodeDirectory);
+                MessageBox.Show("Rozpoczêcie generowania kodu kreskowego");
+
+                // U¿ywamy BarcodeWriterPixelData zamiast BarcodeWriter
+                var barcodeWriter = new BarcodeWriterPixelData
+                {
+                    Format = BarcodeFormat.CODE_128,
+                    Options = new EncodingOptions
+                    {
+                        Width = 300,
+                        Height = 100,
+                        Margin = 10
+                    }
+                };
+
+                // Generowanie danych kodu kreskowego w formie pikseli
+                PixelData pixelData = barcodeWriter.Write(barcodeValue);
+
+                // Tworzenie bitmapy z danych pikselowych
+                using (Bitmap bitmap = new Bitmap(pixelData.Width, pixelData.Height, PixelFormat.Format32bppRgb))
+                {
+                    // Lock the bits of the bitmap.
+                    BitmapData bitmapData = bitmap.LockBits(new System.Drawing.Rectangle(0, 0, pixelData.Width, pixelData.Height), ImageLockMode.WriteOnly, PixelFormat.Format32bppRgb);
+                    try
+                    {
+                        // Update the bitmap with the data from the PixelData
+                        System.Runtime.InteropServices.Marshal.Copy(pixelData.Pixels, 0, bitmapData.Scan0, pixelData.Pixels.Length);
+                    }
+                    finally
+                    {
+                        bitmap.UnlockBits(bitmapData);
+                    }
+
+                    // Pobierz œcie¿kê do pliku wykonywalnego aplikacji
+                    string executablePath = Assembly.GetExecutingAssembly().Location;
+                    string executableDirectory = System.IO.Path.GetDirectoryName(executablePath);
+
+                    // Okreœl œcie¿kê do folderu "Barcode"
+                    string barcodeDirectory = System.IO.Path.Combine(executableDirectory, "Barcode");
+
+                    // Utwórz folder, jeœli nie istnieje
+                    if (!Directory.Exists(barcodeDirectory))
+                    {
+                        Directory.CreateDirectory(barcodeDirectory);
+                    }
+
+                    // Zapisz plik kodu kreskowego
+                    string filePath = System.IO.Path.Combine(barcodeDirectory, $"{barcodeValue}.png");
+                    bitmap.Save(filePath, ImageFormat.Png);
+                    MessageBox.Show($"Kod kreskowy zosta³ zapisany w: {filePath}");
+                }
             }
-
-            // Zapisz obraz kodu kreskowego do pliku
-            barcodeBitmap.Save(fileName, ImageFormat.Png);
-        }
-
-        private void GenerateQRCodeAndSave(string qrText, string fileName)
-        {
-            // Utwórz obiekt BarcodeWriter z odpowiednimi parametrami typu
-            BarcodeWriter<Bitmap> barcodeWriter = new();
-            barcodeWriter.Format = BarcodeFormat.QR_CODE;
-            barcodeWriter.Options = new ZXing.Common.EncodingOptions
+            catch (Exception ex)
             {
-                Width = 300,
-                Height = 300,
-                Margin = 0
-            };
-
-            // Utwórz obraz kodu QR
-            Bitmap qrBitmap = barcodeWriter.Write(qrText);
-
-            // Zapisz obraz kodu QR do pliku
-            qrBitmap.Save(fileName, ImageFormat.Png);
+                MessageBox.Show($"B³¹d podczas generowania kodu kreskowego: {ex.Message}");
+            }
         }
 
         private void GenerateAndSaveQRCode(string trace, string trace2, string pn, string rev, string rackQty, string barcode)
         {
-            if (!string.IsNullOrEmpty(trace) || !string.IsNullOrEmpty(trace2))
+            try
             {
-                string qrText = string.Empty;
+                MessageBox.Show("Rozpoczêcie generowania kodu QR");
 
+                var barcodeWriter = new BarcodeWriterPixelData
+                {
+                    Format = BarcodeFormat.QR_CODE,
+                    Options = new EncodingOptions
+                    {
+                        Width = 300,
+                        Height = 300,
+                        Margin = 10
+                    }
+                };
+
+                string qrText = string.Empty;
                 if (!string.IsNullOrEmpty(trace) && !string.IsNullOrEmpty(trace2))
                 {
                     qrText = $"[)>06:AS\"barcode\":PN\"{pn}\":QT\"{rackQty}.000\":RV\"{rev}\":DM\"{DateTime.Now.ToString("ddMMyy")}\":SPHS:PO:LT\"{GenerateLotCode(DateTime.Now)}\":WT\"{trace}\" / \"{trace2}\":PT\"{DateTime.Now.ToString("dd.MM.yy")} {DateTime.Now.TimeOfDay}\"/#{rack} / #{rack2}/{pn}:*[]\"";
@@ -542,15 +382,38 @@ namespace SejinTraceability
                     qrText = $"[)>06:AS\"barcode\":PN\"{pn}\":QT\"{rackQty}.000\":RV\"{rev}\":DM\"{DateTime.Now.ToString("ddMMyy")}\":SPHS:PO:LT\"{GenerateLotCode(DateTime.Now)}\":WT\"{trace}\":PT\"{DateTime.Now.ToString("dd.MM.yy")} {DateTime.Now.TimeOfDay}\"/#{rack} / #{rack2}/{pn}:*[]\"";
                 }
 
-                // U¿yj wczeœniej zdefiniowanych metod do generowania i zapisywania kodu kreskowego oraz QR
-                GenerateBarcodeAndSave(trace, barcode, "Barcode\\" + "Barcode.png");
-                GenerateQRCodeAndSave(qrText, "QRCode\\" + "QRCode.png");
+                // Generowanie danych kodu QR w formie pikseli
+                PixelData pixelData = barcodeWriter.Write(qrText);
 
+                // Tworzenie bitmapy z danych pikselowych
+                using (Bitmap bitmap = new Bitmap(pixelData.Width, pixelData.Height, PixelFormat.Format32bppRgb))
+                {
+                    // Lock the bits of the bitmap.
+                    BitmapData bitmapData = bitmap.LockBits(new System.Drawing.Rectangle(0, 0, pixelData.Width, pixelData.Height), ImageLockMode.WriteOnly, PixelFormat.Format32bppRgb);
+                    try
+                    {
+                        // Update the bitmap with the data from the PixelData
+                        System.Runtime.InteropServices.Marshal.Copy(pixelData.Pixels, 0, bitmapData.Scan0, pixelData.Pixels.Length);
+                    }
+                    finally
+                    {
+                        bitmap.UnlockBits(bitmapData);
+                    }
+
+                    // Zapisz kod QR w odpowiednim folderze
+                    string filePath = System.IO.Path.Combine("QRCode", $"{barcode}.png");
+                    bitmap.Save(filePath, ImageFormat.Png);
+                    MessageBox.Show($"Kod QR zosta³ zapisany w: {filePath}");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"B³¹d podczas generowania kodu QR: {ex.Message}");
             }
         }
 
 
-        private void InsertRecord(string pn, DateTime date, TimeSpan hour, string rackQty, string rack, string rack2, string trace, string trace2, string pTrace, string barcode)
+        private async void InsertRecord(string pn, DateTime date, TimeSpan hour, string rackQty, string rack, string rack2, string trace, string trace2, string pTrace, string barcode)
         {
             using (SqlConnection connection = new(connectionString))
             {
@@ -614,8 +477,7 @@ namespace SejinTraceability
             }
         }
 
-
-        private (string partName, string revValue, string barcodeValue) GetPartNameRevAndBarcode(string pn)
+        private async Task<(string partName, string rev, string barcode)> GetPartNameRevAndBarcodeAsync(string pn)
         {
             string partName = string.Empty;
             string rev = string.Empty;
@@ -643,7 +505,7 @@ namespace SejinTraceability
                 }
 
                 // Pobierz ostatni¹ wartoœæ kolumny "Barcode" z tabeli "Archive" na podstawie PN
-                string selectArchiveBarcodeQuery = "SELECT TOP 1 [Barcode] FROM [Archive] WHERE PN = @pn ORDER BY Date DESC, Hour DESC";
+                string selectArchiveBarcodeQuery = "SELECT TOP 1 [Barcode] FROM [Archive] ORDER BY Date DESC, Hour DESC;\r\n";
 
                 using (SqlCommand cmd = new(selectArchiveBarcodeQuery, connection))
                 {
@@ -673,15 +535,15 @@ namespace SejinTraceability
             return (partName, rev, barcode);
         }
 
-
         private static void OpenAndPrintExcelFile(string pn, DateTime date, TimeSpan hour, string rackQty, string rack, string rack2, string trace, string trace2, string p_trace, string rev, string barcode)
         {
-
-            string currentDirectory = Directory.GetCurrentDirectory();
+            
+            // Pobierz pe³n¹ œcie¿kê do pliku wykonywalnego aplikacji
+            string executablePath = Assembly.GetExecutingAssembly().Location;
+            string executableDirectory = System.IO.Path.GetDirectoryName(executablePath);
+            string labelDirectory = System.IO.Path.Combine(executableDirectory, "Label"); // Folder "Label" w tym samym katalogu, co plik wykonywalny
             string excelFileName = "label.xlsx";
-            string labelDirectory = "Label"; // Nowa lokalizacja dla pliku Excela
-
-            string excelFilePath = System.IO.Path.Combine(currentDirectory, labelDirectory, excelFileName);
+            string excelFilePath = System.IO.Path.Combine(labelDirectory, excelFileName);
 
 
             Microsoft.Office.Interop.Excel.Application excelApp = new();
@@ -730,6 +592,7 @@ namespace SejinTraceability
                 excelApp.Quit();
                 System.Runtime.InteropServices.Marshal.ReleaseComObject(excelApp);
             }
+            
         }
 
         private void ExportButtonClick(object sender, EventArgs e)

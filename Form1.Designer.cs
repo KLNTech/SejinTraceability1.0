@@ -105,7 +105,7 @@
             this.print_archive.TabIndex = 6;
             this.print_archive.Text = "Print label and archive the record";
             this.print_archive.UseVisualStyleBackColor = true;
-            this.print_archive.Click += new System.EventHandler(this.PrintAndArchiveClick);
+            this.print_archive.Click += new System.EventHandler(this.OpenAndPrintExcelFileHandler);
             // 
             // label1
             // 
